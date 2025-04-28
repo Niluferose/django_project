@@ -1,0 +1,126 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<style>
+    .room-container {
+        display: grid;
+        grid-template-columns: 3fr 1fr;
+        gap: 20px;
+    }
+
+    .room-content, .participants {
+        background-color: #2C2F33;
+        padding: 20px;
+        border-radius: 8px;
+        color: #FFFFFF;
+    }
+
+    .room-content h3, .room-content h1, .participants h3 {
+        font-size: 1.5em;
+        margin-bottom: 10px;
+    }
+
+    .room-content h1 {
+        font-size: 2em;
+    }
+
+    .room-content p, .participants p {
+        font-size: 1em;
+    }
+
+    .room-content .comment-wrapper, .room-content .comment-form {
+        margin-top: 20px;
+    }
+
+    .room-content .comment-wrapper div {
+        background-color: #23272A;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .room-content .comment-wrapper h4, .room-content .comment-wrapper p {
+        margin: 5px 0;
+    }
+
+    .room-content .comment-wrapper a {
+        color: #FF6347;
+        text-decoration: none;
+    }
+
+    .room-content .comment-wrapper a:hover {
+        text-decoration: underline;
+    }
+
+    .room-content .comment-form input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        border-radius: 5px;
+        border: none;
+        margin-top: 10px;
+    }
+
+    .participants p {
+        background-color: #23272A;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .btn-sm {
+        padding: 5px 10px;
+        border-radius: 3px;
+        text-decoration: none;
+        background-color: #FF6347;
+        color: #FFFFFF;
+    }
+
+    .btn-sm:hover {
+        background-color: #E5533E;
+    }
+
+</style>
+
+<div class="room-container">
+    <div class="room-content">
+        <h3>@{{ room.host.username }}</h3>
+        <h1>{{ room.name }}</h1>
+        <p>{{ room.description }}</p>
+        <hr>
+
+        <div class="comment-wrapper">
+            <h3>Conversation</h3>
+            <hr>
+            {% for message in room_messages %}
+            <div>
+                {% if request.user == message.user %}
+                <a href="{% url 'delete-message' message.id %}" class="btn-sm">Delete</a>
+                {% endif %}
+                <small><h4>@{{ message.user }}</h4> {{ message.created|timesince }} ago</small>
+                <p>{{ message.body }}</p>
+                <hr>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if request.user.is_authenticated %}
+        <div class="comment-form">
+            <form method="POST" action="">
+                {% csrf_token %}
+                <input type="text" name="body" placeholder="Write your message here..." />
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="participants">
+        <h3>Participants</h3>
+        <hr>
+        {% for user in participants %}
+        <p>@{{ user.username }}</p>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

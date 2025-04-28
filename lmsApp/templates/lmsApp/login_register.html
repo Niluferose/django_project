@@ -1,0 +1,103 @@
+{% extends 'main.html' %}
+
+{% block additional_styles %}
+<style>
+
+    .form-container {
+    background: white;
+    padding: 20px 25px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 300px;
+    position: absolute;
+    left: 700px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+    .form-container h1 {
+        margin-bottom: 20px;
+        font-size: 24px;
+        font-weight: 600;
+        text-align: center;
+    }
+
+    .form-container label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+
+    .form-container input[type="text"],
+    .form-container input[type="password"],
+    .form-container input[type="email"],
+    .form-container input[type="submit"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .form-container input[type="submit"] {
+        background-color: #5cb85c;
+        color: white;
+        cursor: pointer;
+        border: none;
+    }
+
+    .form-container input[type="submit"]:hover {
+        background-color: #4cae4c;
+    }
+
+    .form-container p {
+        text-align: center;
+    }
+
+    .form-container a {
+        color: #5cb85c;
+        text-decoration: none;
+    }
+
+    .form-container a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="form-container">
+        {% if page == 'login' %}
+            <h1>Login</h1>
+            <form method="POST" action="">
+                {% csrf_token %}
+
+                <label>Username:</label>
+                <input type="text" name="username" placeholder="Enter Username" />
+
+                <label>Password:</label>
+                <input type="password" name="password" placeholder="Enter Password" />
+
+                <input type="submit" value="Login" />
+            </form>
+
+            <p>Haven't signed up yet?</p>
+            <a href="{% url 'register' %}">Sign Up</a>
+
+        {% else %}
+            <h1>Register</h1>
+            <form method="POST" action="">
+                {% csrf_token %}
+                {{ form.as_p }}
+
+                <input type="submit" value="Register" />
+            </form>
+
+            <p>Already signed up?</p>
+            <a href="{% url 'login' %}">Login</a>
+
+        {% endif %}
+    </div>
+
+{% endblock %}

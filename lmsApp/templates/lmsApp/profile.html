@@ -1,0 +1,67 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<style>
+    .profile-container {
+        display: grid;
+        grid-template-columns: 1fr 3fr 1fr;
+        gap: 20px;
+        color: #FFFFFF;
+    }
+
+    .profile-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .profile-header h1 {
+        font-size: 2.5em;
+        color: black;
+    }
+
+    .profile-section {
+        background-color: #2C2F33;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .profile-section h3 {
+        font-size: 1.5em;
+        margin-bottom: 20px;
+    }
+
+    .profile-section a {
+        color: #7289DA;
+        text-decoration: none;
+    }
+
+    .profile-section a:hover {
+        text-decoration: underline;
+    }
+
+    .profile-section hr {
+        border: 1px solid #444;
+    }
+</style>
+
+<div class="profile-header">
+    <h1>{{ user.username }}</h1>
+</div>
+
+<div class="profile-container">
+    <div class="profile-section">
+        {% include 'lmsApp/topics_component.html' %}
+    </div>
+
+    <div class="profile-section">
+        {% include 'lmsApp/feed_component.html' %}
+    </div>
+
+    <div class="profile-section">
+        {% include 'lmsApp/activity_component.html' %}
+    </div>
+</div>
+
+{% endblock %}

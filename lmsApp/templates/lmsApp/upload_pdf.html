@@ -1,0 +1,12 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div>
+    <h2>Upload PDF for {{ lesson.name }} - Week {{ week.week_number }}</h2>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Upload PDF</button>
+    </form>
+</div>
+{% endblock %}

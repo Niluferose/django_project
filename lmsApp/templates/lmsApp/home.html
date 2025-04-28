@@ -1,0 +1,82 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<style>
+    .home-container {
+        display: grid;
+        grid-template-columns: 1fr 3fr 1fr;
+        gap: 20px;
+    }
+
+    .topics, .feed, .activity {
+        background-color: #2C2F33;
+        padding: 20px;
+        border-radius: 8px;
+        color: #FFFFFF;
+    }
+
+    .topics h3, .activity h3 {
+        font-size: 1.5em;
+        margin-bottom: 10px;
+    }
+
+    .topics a, .activity a {
+        color: #7289DA;
+        text-decoration: none;
+    }
+
+    .topics a:hover, .activity a:hover {
+        text-decoration: underline;
+    }
+
+    .feed div {
+        background-color: #23272A;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .feed a {
+        color: #7289DA;
+        text-decoration: none;
+    }
+
+    .feed a:hover {
+        text-decoration: underline;
+    }
+
+    .btn-primary {
+        background-color: white;
+        color: #FFFFFF;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 5px;
+        text-decoration: none;
+    }
+
+    .btn-primary:hover {
+        background-color: #5A6FA1;
+    }
+
+</style>
+
+<div class="home-container">
+    <div class="topics">
+        {% include 'lmsApp/topics_component.html' %}
+    </div>
+
+    <div class="feed">
+        <h5>{{ room_count }} rooms available.</h5>
+        <a href="{% url 'create-room' %}" class="btn btn-primary">Create Room</a>
+        <div>
+            {% include 'lmsApp/feed_component.html' %}
+        </div>
+    </div>
+
+    <div class="activity">
+        {% include 'lmsApp/activity_component.html' %}
+    </div>
+</div>
+
+{% endblock %}

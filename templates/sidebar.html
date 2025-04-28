@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidebar</title>
+    <link rel="stylesheet" href="{% static 'styles/style.css' %}">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+</head>
+{% block additional_styles %}
+    <style>
+    body{
+        margin: 0;
+        background-image: url('{% static "images/image.jpg" %}');
+        background-size: cover;
+        background-position: center;
+    }
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        background: #f2fed1;
+        width: 300px;
+        box-shadow: 0 20px 35px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        box-sizing: border-box;
+    }
+
+    .logo-menu {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .logo {
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .list-item {
+        margin-bottom: 15px;
+    }
+
+    .list-item a {
+        color: #555;
+        text-decoration: none;
+        font-size: 16px;
+        display: block;
+        padding: 10px 20px;
+        border-radius: 5px;
+        transition: background-color 0.3s, color 0.3s;
+    }
+
+    .list-item a:hover,
+    .list-item.active a {
+        background: #abf600;
+        color: #fff;
+    }
+    </style>
+{% endblock %}
+<body>
+    <nav class="sidebar">
+        <div class="logo-menu">
+            <h2 class="logo">LMS+</h2>
+        </div>
+        <ul class="list">
+            <li class="list-item {% if request.path == '/dashboard/' %}active{% endif %}">
+                <a href="/dashboard/">
+                    <i class='bx bx-grid-alt'></i>
+                    <span class="link-name" style="--i:1">Dashboard</span>
+                </a>
+            </li>
+            <li class="list-item {% if request.path == '/lessons/' %}active{% endif %}">
+                <a href="/lessons/">
+                    <i class='bx bxs-book-content'></i>
+                    <span class="link-name" style="--i:3">My Lessons</span>
+                </a>
+            </li>
+            <li class="list-item {% if request.path == '/calendar/' %}active{% endif %}">
+                <a href="/calendar_view/">
+                    <i class='bx bxs-calendar'></i>
+                    <span class="link-name" style="--i:4">Calendar</span>
+                </a>
+            </li>
+            <li class="list-item {% if request.path == '/notes/' %}active{% endif %}">
+                <a href="/notes/">
+                    <i class='bx bxs-note'></i>
+                    <span class="link-name" style="--i:5">Notes</span>
+                </a>
+            </li>
+            <li class="list-item {% if request.path == '/forum/' %}active{% endif %}">
+                <a href="/forum/">
+                    <i class='bx bxs-navigation'></i>
+                    <span class="link-name" style="--i:6">Forum</span>
+                </a>
+            </li>
+            {% if request.user.is_authenticated %}
+            <li class="list-item">
+                <a href="{% url 'logout' %}">
+                    <i class='bx bx-log-in-circle'></i>
+                    <span class="link-name" style="--i:8">Logout</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="list-item">
+                <a href="{% url 'login' %}">
+                    <i class='bx bx-log-in-circle'></i>
+                    <span class="link-name" style="--i:8">Login</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    <script src="{% static 'js/script.js' %}"></script>
+</body>
+</html>

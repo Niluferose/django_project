@@ -1,0 +1,187 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="header">
+        <h3>Welcome {{ request.user }}, Time to Study!</h3>
+    </div>
+    <div class="quick-actions">
+        <div class="action-card">
+            <a href="{% url 'create_lesson' %}">
+                <div class="action-content">
+                    <h2>Create Lesson</h2>
+                    <p>Start New</p>
+                </div>
+            </a>
+        </div>
+        <div class="action-card">
+            <a href="{% url 'create_note' %}">
+                <div class="action-content">
+                    <h2>Create Note</h2>
+                    <p>Add New</p>
+                </div>
+            </a>
+        </div>
+    </div>
+    <div class="lessons-section">
+        <h2>My Lessons</h2>
+        <div class="lessons-carousel">
+            {% if lessons %}
+                {% for lesson in lessons %}
+                <div class="lesson-card">
+                    <a href="{% url 'lesson_detail' lesson.id %}">
+                        <div class="lesson-content">
+                            <h3>{{ lesson.name }}</h3>
+                            <p>{{ lesson.description }}</p>
+                        </div>
+                    </a>
+                    <div class="lesson-buttons">
+                        <a href="{% url 'edit_lesson' lesson.id %}" class="btn btn-edit">Edit</a>
+                        <a href="{% url 'delete_lesson' lesson.id %}" class="btn btn-delete">Delete</a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Are you ready to create your own ALMS? So, start by creating a lesson :)</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_styles %}
+<style>
+body {
+    background-color: #f0f0f0;
+    font-family: 'Poppins', sans-serif;
+}
+
+.dashboard {
+    padding: 20px;
+}
+
+.header h1 {
+    font-size: 24px;
+    color: #333;
+}
+
+.quick-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 20px;
+}
+
+.action-card {
+    background-color: #f2fed1;
+    border-radius: 10px;
+    width: 48%;
+    padding: 20px;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+
+.action-card a {
+    text-decoration: none;
+    color: #333;
+}
+
+.action-card:hover {
+    background-color: #ABF600;
+}
+
+.action-content h2 {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.action-content p {
+    font-size: 14px;
+}
+
+.lessons-section {
+    background-color: #f2fed1;
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.lessons-section h2 {
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.lessons-carousel {
+    display: flex;
+    overflow-x: auto;
+    gap: 20px;
+}
+
+.lesson-card {
+    background-color: #404040;
+    border-radius: 10px;
+    padding: 15px;
+    width: 200px;
+    flex: 0 0 auto;
+    transition: box-shadow 0.3s ease;
+}
+
+.lesson-card a {
+    text-decoration: none;
+    color: white;
+}
+
+.lesson-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background-color: #ABF600;
+}
+
+.lesson-content h3 {
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+.lesson-content p {
+    font-size: 14px;
+    color: #666;
+}
+
+.lesson-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* Genel düğme stili */
+.btn {
+    display: inline-block;
+    padding: 10px 15px;
+    margin: 5px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+
+/* Edit düğmesi stili */
+.btn-edit {
+    background-color: #404040;
+}
+
+.btn-edit:hover {
+    background-color: black;
+}
+
+/* Delete düğmesi stili */
+.btn-delete {
+    background-color: #404040;
+}
+
+.btn-delete:hover {
+    background-color: black;
+}
+</style>
+{% endblock %}

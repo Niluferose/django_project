@@ -1,0 +1,143 @@
+{% extends 'main.html' %}
+
+{% block additional_styles %}
+<style>
+
+.lesson-container {
+    padding: 20px;
+    width: 100%;
+    box-sizing: border-box;
+
+.lesson-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.lesson {
+    background-color: #404040;
+    border-radius: 30px;
+    padding: 20px;
+    display: flex;
+    justify-content: left;
+    align-items: left;
+    transition: background-color 0.3s;
+    width: 100%; /* Kutunun genişliği */
+    max-width: 1000px; /* Kutunun maksimum genişliği */
+    min-width: 800px; /* Kutunun minimum genişliği */
+}
+
+.lesson a {
+    color: white;
+    text-decoration: none;
+    width: 100%;
+}
+
+.lesson:hover {
+    background-color: black;
+}
+
+.lesson-content {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.lesson-name {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.lesson-field, .lesson-teacher {
+    font-size: 15px;
+}
+.add-new-lesson {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f2fed1;
+    border: 2px dashed #ccc;
+    cursor: pointer;
+    margin-top: 20px;
+    padding: 10px;
+    border-radius: 30px;
+    width: 100%; /* Kutunun genişliği */
+    max-width: 1000px; /* Kutunun maksimum genişliği */
+    min-width: 800px;
+}
+
+.add-lesson-link {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    text-decoration: none;
+    color: #333;
+}
+    .add-new-lesson:hover {
+    background-color: #ABF600;
+}
+
+.add-lesson-icon {
+    font-size: 25px;
+    font-weight: bold;
+}
+        /* Genel düğme stili */
+        .btn {
+            display: inline-block;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+
+        /* Edit düğmesi stili */
+        .btn-edit {
+            background-color: #404040;
+        }
+
+        .btn-edit:hover {
+            background-color: #ABF600;
+        }
+
+        /* Delete düğmesi stili */
+        .btn-delete {
+            background-color: #404040;
+        }
+
+        .btn-delete:hover {
+            background-color: #ABF600;
+        }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lesson-container">
+    <div class="lesson-list">
+        {% for lesson in lessons %}
+        <div class="lesson">
+            <a href="{% url 'lesson_detail' lesson.id %}">
+                <div class="lesson-content">
+                    <div class="lesson-name">{{ lesson.name }}</div>
+                    <div class="lesson-field">{{ lesson.field }}</div>
+                    <div class="lesson-teacher">{{ lesson.teacher }}</div>
+                </div>
+            </a>
+            <a href="{% url 'edit_lesson' lesson.id %}" class="btn btn-edit">Edit</a>
+            <a href="{% url 'delete_lesson' lesson.id %}" class="btn btn-delete">Delete</a>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="add-new-lesson">
+                <a href="{% url 'create_lesson' %}" class="add-lesson-link">
+                    <div class="add-lesson-icon">Add Lesson</div>
+                </a>
+            </div>
+</div>
+{% endblock %}

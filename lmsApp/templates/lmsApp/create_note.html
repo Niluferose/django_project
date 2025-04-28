@@ -1,0 +1,87 @@
+{% extends 'main.html' %}
+
+{% block additional_styles %}
+    <style>
+    .form-container {
+        background-color: #404040;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 20px 35px rgba(0, 0, 0, 0.1);
+        max-width: 1000px;
+        min-width: 800px;
+        margin: 50px auto;
+        text-align: left;
+    }
+
+    .form-container h2 {
+        color: white;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .form-container form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    .form-container label {
+    font-weight: bold;
+    color: white;
+    }
+
+    .form-container form input[type="text"],
+    .form-container form select,
+    .form-container form textarea,
+    .form-container form input[type="number"] {
+        width: 100%;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #f2fed1;
+        font-size: 16px;
+    }
+
+    .form-container form input[type="submit"] {
+        width: 100%;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #abf600;
+        color: #404040;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .form-container form input[type="submit"]:hover {
+        background-color: #94d200;
+    }
+    .messages {
+    margin: 20px 0;
+}
+
+.alert {
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+    </style>
+{% endblock %}
+
+{% block content %}
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        {% endfor %}
+    </div>
+{% endif %}
+    <div class="form-container">
+        <h2>Create Note</h2>
+        <form method="post" action="">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <input type="submit" value="Submit" class="submit-btn">
+        </form>
+    </div>
+{% endblock %}

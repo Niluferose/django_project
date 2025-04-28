@@ -1,0 +1,12 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div>
+    <h2>Are you sure you want to delete the PDF: {{ pdf.title }}?</h2>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Delete</button>
+        <a href="{% url 'week_detail' lesson_id=pdf.week.lesson.id week_number=pdf.week.week_number %}">Cancel</a>
+    </form>
+</div>
+{% endblock %}

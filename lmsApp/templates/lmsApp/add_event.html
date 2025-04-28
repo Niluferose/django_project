@@ -1,0 +1,19 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container">
+    <h1>Add Event</h1>
+    <form method="post" action="{% url 'add_event' %}">
+        {% csrf_token %}
+        <div>
+            <label for="title">Event title:</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+        <div>
+            <label for="date">Event date:</label>
+            <input type="date" id="date" name="date" required>
+        </div>
+        <button type="submit">Add Event</button>
+    </form>
+</div>
+{% endblock %}

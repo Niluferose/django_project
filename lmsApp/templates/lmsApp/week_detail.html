@@ -1,0 +1,132 @@
+{% extends 'main.html' %}
+
+{% block additional_styles %}
+<style>
+    .content-wrapper {
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        margin: 20px;
+    }
+
+    .content-header {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+
+    .content-section {
+        margin-bottom: 20px;
+    }
+
+    .content-section h2 {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .note-list, .pdf-list {
+        list-style-type: none;
+        padding: 0;
+    }
+
+    .note-list li, .pdf-list li {
+        background-color: #f9f9f9;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .note-list li a, .pdf-list li a {
+        text-decoration: none;
+        color: #333;
+        font-weight: bold;
+    }
+
+    .note-list li a:hover, .pdf-list li a:hover {
+        text-decoration: underline;
+    }
+
+    .action-links {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .action-links a {
+        padding: 10px 15px;
+        background-color: #4CAF50;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+    }
+
+    .action-links a:hover {
+        background-color: #45a049;
+    }
+
+    .upload-link {
+        background-color: #f44336;
+    }
+
+    .upload-link:hover {
+        background-color: #da190b;
+    }
+
+    .edit-link, .delete-link {
+        color: blue;
+        text-decoration: none;
+        font-weight: bold;
+        margin-left: 10px;
+    }
+
+    .delete-link {
+        color: red;
+    }
+
+    .edit-link:hover, .delete-link:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="content-header">{{ lesson.name }} - Week {{ week.week_number }}</div>
+    <div class="content-section">
+        <h2>Notes</h2>
+        <ul class="note-list">
+            {% for note in notes %}
+                <li>
+                    <a href="{% url 'note_detail' note_id=note.id %}">{{ note.title }}</a>
+                    <a href="{% url 'edit_note' note_id=note.id %}" class="edit-link">Edit</a>
+                    <a href="{% url 'delete_note' note_id=note.id %}" class="delete-link">Delete</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="action-links">
+        <a href="{% url 'create_note' %}">Add a Note</a>
+        <a href="{% url 'upload_pdf' lesson_id=lesson.id week_number=week.week_number %}" class="upload-link">Upload PDF</a>
+        <a href="{% url 'lesson_detail' lesson_id=lesson.id %}" class="lesson-link">Back to Lesson</a>
+    </div>
+    {% if pdfs.exists %}
+        <div class="content-section">
+            <h2>Existing PDFs:</h2>
+            <ul class="pdf-list">
+                {% for pdf in pdfs %}
+                    <li>
+                        <a href="{% url 'view_pdf' pdf_id=pdf.id %}" target="_blank">{{ pdf.title }}</a>
+                        <a href="{% url 'delete_pdf' pdf_id=pdf.id %}" class="delete-link">Delete</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% else %}
+        <p>No PDFs available.</p>
+    {% endif %}
+</div>
+{% endblock %}

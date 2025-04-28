@@ -1,0 +1,88 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<style>
+    .form-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+        background-color: #2C2F33;
+        padding: 20px;
+        border-radius: 8px;
+        color: #FFFFFF;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-box {
+        width: 100%;
+        max-width: 600px;
+        background-color: #23272A;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-box h2 {
+        margin-bottom: 20px;
+        font-size: 1.8em;
+        color: #FFFFFF;
+        text-align: center;
+    }
+
+    .form-box form {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-box form label {
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #FFFFFF;
+    }
+
+    .form-box form input[type="text"],
+    .form-box form textarea {
+        padding: 10px;
+        margin-bottom: 15px;
+        border: none;
+        border-radius: 5px;
+        background-color: #2C2F33;
+        color: #FFFFFF;
+        resize: none;
+    }
+
+    .form-box form input[type="text"]::placeholder,
+    .form-box form textarea::placeholder {
+        color: #B9BBBE;
+    }
+
+    .form-box form input[type="submit"] {
+        padding: 10px 15px;
+        border: none;
+        border-radius: 5px;
+        background-color: #7289DA;
+        color: #FFFFFF;
+        font-size: 1em;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .form-box form input[type="submit"]:hover {
+        background-color: #5A6FA1;
+    }
+</style>
+
+<div class="form-container">
+    <div class="form-box">
+        <h2>Create Room</h2>
+        <form method="POST" action="">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <input type="submit" value="Submit" />
+        </form>
+    </div>
+</div>
+
+{% endblock %}

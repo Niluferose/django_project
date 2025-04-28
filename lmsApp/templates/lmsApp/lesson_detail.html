@@ -1,0 +1,124 @@
+{% load static %}
+
+{% block content %}
+
+<div class="container">
+<div class="mb-4">
+        <a href="{% url 'lessons_list' %}" class="sde">Back to All Lessons</a>
+    </div>
+    <h1 class="lesson-title">{{ lesson.name }}</h1>
+    <div class="rtmu">
+        <h1>Weeks</h1>
+        <div class="weeks">
+            {% for week in weeks %}
+            <div class="week" id="week{{ week.week_number }}">
+                <button>
+                    <a href="{% url 'week_detail' lesson.id week.week_number %}">Week {{ week.week_number }}</a>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_styles %}
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-image: url('{% static "images/image.jpg" %}');
+    background-size: cover;
+    background-position: center;
+}
+
+.container {
+    width: 100%;
+    padding: 15px;
+    box-sizing: border-box;
+}
+
+.mb-4 {
+    margin: 0;
+}
+
+.mb-4 .sde {
+    display: inline-block;
+    padding: 10px 20px;
+    color: #ffffff;
+    background-color: #404040;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+.mb-4 .sde:hover {
+    background-color: #ABF600;
+}
+
+.lesson-title {
+    font-size: 30px;
+    font-weight: bold;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    flex: 1;
+}
+
+.rtmu {
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.weeks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 20px;
+    justify-content: space-between;
+    align-items: stretch;
+}
+
+.week {
+    background-color: #404040;
+    border-radius: 20px;
+    padding: 20px;
+    flex: 1 1 calc(25% - 20px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #ffffff;
+    height: 150px;
+    min-height: 150px;
+    box-sizing: border-box;
+    transition: background-color 0.3s;
+}
+
+.week:hover {
+    background-color: #ABF600;
+}
+
+.week button {
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    outline: inherit;
+}
+
+.week a {
+    color: white;
+    text-decoration: none;
+}
+
+.week a:hover {
+    color: white;
+}
+</style>
+{% endblock %}
