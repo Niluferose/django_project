@@ -53,27 +53,39 @@
         display: flex;
         gap: 10px;
         margin-top: 10px;
+        flex-wrap: wrap;
     }
 
-    .action-links a {
+    .action-links a, .action-links button {
         padding: 10px 15px;
         background-color: #4CAF50;
         color: #fff;
         text-decoration: none;
         border-radius: 5px;
         transition: background-color 0.3s ease;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
     }
 
-    .action-links a:hover {
+    .action-links a:hover, .action-links button:hover {
         background-color: #45a049;
     }
 
     .upload-link {
-        background-color: #f44336;
+        background-color: #f44336 !important;
     }
 
     .upload-link:hover {
-        background-color: #da190b;
+        background-color: #da190b !important;
+    }
+
+    .ai-link {
+        background-color: #2196F3 !important;
+    }
+
+    .ai-link:hover {
+        background-color: #0b7dda !important;
     }
 
     .edit-link, .delete-link {
@@ -90,18 +102,100 @@
     .edit-link:hover, .delete-link:hover {
         text-decoration: underline;
     }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+    
+    .modal-content {
+        background-color: white;
+        margin: 15% auto;
+        padding: 20px;
+        border-radius: 5px;
+        width: 50%;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close:hover {
+        color: black;
+    }
+    
+    .ai-badge {
+        background-color: #2196F3;
+        color: white;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-size: 12px;
+        margin-left: 5px;
+    }
+    
+    .loading-indicator {
+        background-color: #fff9c4;
+        border-left: 4px solid #ffeb3b;
+        padding: 10px;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 2s linear infinite;
+        margin-right: 10px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="content-wrapper">
     <div class="content-header">{{ lesson.name }} - Week {{ week.week_number }}</div>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    {% if ai_note_generated %}
+        <div class="loading-indicator">
+            <div class="spinner"></div>
+            <span>AI tarafından not oluşturuluyor... Bu işlem biraz zaman alabilir. Lütfen sayfayı bir kaç saniye sonra yenileyin.</span>
+        </div>
+    {% endif %}
+    
     <div class="content-section">
         <h2>Notes</h2>
         <ul class="note-list">
             {% for note in notes %}
                 <li>
                     <a href="{% url 'note_detail' note_id=note.id %}">{{ note.title }}</a>
+                    {% if note.ai_summary %}<span class="ai-badge">AI</span>{% endif %}
                     <a href="{% url 'edit_note' note_id=note.id %}" class="edit-link">Edit</a>
                     <a href="{% url 'delete_note' note_id=note.id %}" class="delete-link">Delete</a>
                 </li>
@@ -110,6 +204,7 @@
     </div>
     <div class="action-links">
         <a href="{% url 'create_note' %}">Add a Note</a>
+        <button id="ai-note-btn" class="ai-link">AI Not Oluştur</button>
         <a href="{% url 'upload_pdf' lesson_id=lesson.id week_number=week.week_number %}" class="upload-link">Upload PDF</a>
         <a href="{% url 'lesson_detail' lesson_id=lesson.id %}" class="lesson-link">Back to Lesson</a>
     </div>
@@ -128,5 +223,56 @@
     {% else %}
         <p>No PDFs available.</p>
     {% endif %}
+    
+    <!-- AI Not Oluşturma Modal -->
+    <div id="ai-note-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>AI Not Oluştur</h3>
+            <p>LLM modelimiz ders hakkında notlar oluşturacak. Lütfen not için bir başlık girin veya otomatik oluşturulması için boş bırakın.</p>
+            
+            <form method="POST" action="">
+                {% csrf_token %}
+                <div class="form-group mb-3">
+                    <label for="note_title">Not Başlığı (Opsiyonel):</label>
+                    <input type="text" name="note_title" id="note_title" class="form-control" placeholder="Otomatik başlık için boş bırakın">
+                </div>
+                <input type="hidden" name="generate_ai_note" value="1">
+                <button type="submit" class="btn btn-primary">Not Oluştur</button>
+            </form>
+        </div>
+    </div>
 </div>
+
+<script>
+    // AI not modal fonksiyonları
+    var modal = document.getElementById("ai-note-modal");
+    var btn = document.getElementById("ai-note-btn");
+    var span = document.getElementsByClassName("close")[0];
+    
+    btn.onclick = function() {
+        modal.style.display = "block";
+    }
+    
+    span.onclick = function() {
+        modal.style.display = "none";
+    }
+    
+    // Kullanıcı modal dışına tıklarsa kapat
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+    
+    // Sayfa yüklendiğinde yükleme göstergesini göster ve 5 saniye sonra otomatik yenile
+    document.addEventListener('DOMContentLoaded', function() {
+        var loadingIndicator = document.querySelector('.loading-indicator');
+        if (loadingIndicator) {
+            setTimeout(function() {
+                window.location.reload();
+            }, 5000);
+        }
+    });
+</script>
 {% endblock %}

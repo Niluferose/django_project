@@ -28,6 +28,8 @@ class Note(models.Model):
     week = models.ForeignKey(Week, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
     note = models.TextField()
+    ai_summary = models.TextField(blank=True, null=True)
+    ai_questions = models.TextField(blank=True, null=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
 
     def _str_(self):
@@ -87,5 +89,17 @@ class Message(models.Model):
 
     def __str__(self):
         return self.body[0:50]
+
+class ChatMessage(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    message = models.TextField()
+    response = models.TextField()
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created']
+
+    def __str__(self):
+        return f"{self.user.username}: {self.message[:50]}"
 
 

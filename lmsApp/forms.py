@@ -1,6 +1,6 @@
 from django.forms import ModelForm
 from django import forms
-from .models import Room, Lesson, WeekPDF, Event, Note
+from .models import Room, Lesson, WeekPDF, Event, Note, ChatMessage
 
 
 class RoomForm(ModelForm):
@@ -39,3 +39,9 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         fields = ['title', 'date']
+
+class ChatForm(forms.Form):
+    message = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Sorunuzu buraya yazın...'}),
+        label='Mesaj'
+    )

@@ -22,6 +22,7 @@
     flex-direction: column;
     gap: 20px;
     padding: 20px;
+    margin-bottom: 80px; /* AI chat için yer açıyoruz */
 }
 
 .note-grid {
@@ -109,6 +110,172 @@
     font-size: 25px;
     font-weight: bold;
 }
+
+/* AI Not Asistanı Stilleri */
+.ai-note-assistant {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.ai-chat-button {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #2196F3;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.ai-chat-button:hover {
+    background-color: #0b7dda;
+    transform: scale(1.1);
+}
+
+.ai-chat-window {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 350px;
+    height: 450px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1000;
+}
+
+.ai-chat-header {
+    background-color: #2196F3;
+    color: white;
+    padding: 15px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ai-chat-close {
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.ai-chat-messages {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: #f8f9fa;
+}
+
+.ai-user-message, .ai-bot-message {
+    padding: 10px 15px;
+    border-radius: 20px;
+    max-width: 80%;
+    word-break: break-word;
+}
+
+.ai-user-message {
+    background-color: #2196F3;
+    color: white;
+    align-self: flex-end;
+}
+
+.ai-bot-message {
+    background-color: #e9e9e9;
+    color: #333;
+    align-self: flex-start;
+}
+
+.ai-chat-input {
+    display: flex;
+    padding: 10px;
+    border-top: 1px solid #eee;
+    background-color: white;
+}
+
+.ai-chat-input input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    margin-right: 10px;
+}
+
+.ai-chat-input button {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+.ai-chat-input button:hover {
+    background-color: #0b7dda;
+}
+
+.ai-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.ai-option-button {
+    background-color: #e9e9e9;
+    border: 1px solid #ddd;
+    border-radius: 15px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ai-option-button:hover {
+    background-color: #d1d1d1;
+}
+
+.ai-typing {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: #777;
+    font-size: 12px;
+    padding: 5px 0;
+}
+
+.ai-typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #777;
+    border-radius: 50%;
+    animation: ai-typing 1s infinite;
+}
+
+.ai-typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.ai-typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes ai-typing {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
 </style>
 {% endblock %}
 
@@ -136,7 +303,291 @@
             </div>
         </div>
     </div>
+    
+    <!-- AI Not Asistanı -->
+    <div class="ai-note-assistant">
+        <button class="ai-chat-button" id="aiChatButton">
+            <i class="bx bx-bot"></i>
+        </button>
+        
+        <div class="ai-chat-window" id="aiChatWindow">
+            <div class="ai-chat-header">
+                <span>AI Not Asistanı</span>
+                <span class="ai-chat-close" id="aiChatClose">&times;</span>
+            </div>
+            
+            <div class="ai-chat-messages" id="aiChatMessages">
+                <div class="ai-bot-message">
+                    Merhaba! Ben AI Not Asistanınızım. Hangi ders için not oluşturmamı istersiniz?
+                </div>
+                
+                <div class="ai-options">
+                    {% for lesson in all_lessons %}
+                        <button class="ai-option-button" onclick="selectLesson('{{ lesson.id }}', '{{ lesson.name }}')">
+                            {{ lesson.name }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="ai-chat-input">
+                <input type="text" id="aiChatInput" placeholder="Mesajınızı yazın...">
+                <button id="aiChatSend">Gönder</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
+        // AI Chat Penceresi Kontrolü
+        const aiChatButton = document.getElementById('aiChatButton');
+        const aiChatWindow = document.getElementById('aiChatWindow');
+        const aiChatClose = document.getElementById('aiChatClose');
+        const aiChatMessages = document.getElementById('aiChatMessages');
+        const aiChatInput = document.getElementById('aiChatInput');
+        const aiChatSend = document.getElementById('aiChatSend');
+        
+        let selectedLesson = null;
+        let selectedWeek = null;
+        let noteDescription = null;
+        let conversationState = 'start'; // start -> lesson -> week -> description -> confirm
+        
+        aiChatButton.addEventListener('click', () => {
+            aiChatWindow.style.display = 'flex';
+        });
+        
+        aiChatClose.addEventListener('click', () => {
+            aiChatWindow.style.display = 'none';
+        });
+        
+        aiChatSend.addEventListener('click', () => {
+            sendMessage();
+        });
+        
+        aiChatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        function sendMessage() {
+            const message = aiChatInput.value.trim();
+            if (!message) return;
+            
+            // Kullanıcı mesajını ekle
+            addUserMessage(message);
+            aiChatInput.value = '';
+            
+            // Yanıtı işle
+            processResponse(message);
+        }
+        
+        function addUserMessage(message) {
+            const userMessage = document.createElement('div');
+            userMessage.className = 'ai-user-message';
+            userMessage.textContent = message;
+            aiChatMessages.appendChild(userMessage);
+            scrollToBottom();
+        }
+        
+        function addBotMessage(message, withOptions = false, options = []) {
+            // Yazıyor göstergesini ekle
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'ai-typing';
+            typingIndicator.innerHTML = `
+                <div class="ai-typing-dot"></div>
+                <div class="ai-typing-dot"></div>
+                <div class="ai-typing-dot"></div>
+            `;
+            aiChatMessages.appendChild(typingIndicator);
+            scrollToBottom();
+            
+            // Biraz gecikmeyle mesajı göster
+            setTimeout(() => {
+                aiChatMessages.removeChild(typingIndicator);
+                
+                const botMessage = document.createElement('div');
+                botMessage.className = 'ai-bot-message';
+                botMessage.textContent = message;
+                aiChatMessages.appendChild(botMessage);
+                
+                if (withOptions && options.length > 0) {
+                    const optionsDiv = document.createElement('div');
+                    optionsDiv.className = 'ai-options';
+                    options.forEach(option => {
+                        const button = document.createElement('button');
+                        button.className = 'ai-option-button';
+                        button.textContent = option.text;
+                        button.onclick = option.onclick;
+                        optionsDiv.appendChild(button);
+                    });
+                    aiChatMessages.appendChild(optionsDiv);
+                }
+                
+                scrollToBottom();
+            }, 1000);
+        }
+        
+        function scrollToBottom() {
+            aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+        }
+        
+        function processResponse(message) {
+            switch (conversationState) {
+                case 'start':
+                    // Kullanıcı başlangıçta bir mesaj gönderdiğinde
+                    handleInitialMessage(message);
+                    break;
+                case 'lesson':
+                    // Kullanıcı ders seçtikten sonra
+                    handleLessonSelected(message);
+                    break;
+                case 'week':
+                    // Kullanıcı hafta seçtikten sonra
+                    handleWeekSelected(message);
+                    break;
+                case 'description':
+                    // Kullanıcı not içeriği açıklamasını gönderdi
+                    handleDescriptionProvided(message);
+                    break;
+                case 'confirm':
+                    // Kullanıcı onay istedi
+                    handleConfirmation(message);
+                    break;
+            }
+        }
+        
+        function handleInitialMessage(message) {
+            // Eğer kullanıcı başlangıçta bir şey yazdıysa, dersleri listele
+            addBotMessage("Hangi ders için not oluşturmamı istersiniz?", true, 
+                [
+                    {% for lesson in all_lessons %}
+                    {
+                        text: "{{ lesson.name }}",
+                        onclick: () => selectLesson("{{ lesson.id }}", "{{ lesson.name }}")
+                    },
+                    {% endfor %}
+                ]
+            );
+        }
+        
+        function selectLesson(lessonId, lessonName) {
+            selectedLesson = {id: lessonId, name: lessonName};
+            addUserMessage(lessonName);
+            
+            addBotMessage(`${lessonName} dersi için hangi haftaya not eklemek istersiniz? (1-14 arası bir sayı girin)`, false);
+            
+            conversationState = 'week';
+        }
+        
+        function handleLessonSelected(message) {
+            // Bu durumda kullanıcı zaten ders seçmiş olmalı
+            addBotMessage(`${selectedLesson.name} dersi için hangi haftaya not eklemek istersiniz? (1-14 arası bir sayı girin)`, false);
+            conversationState = 'week';
+        }
+        
+        function handleWeekSelected(message) {
+            const weekNumber = parseInt(message);
+            if (isNaN(weekNumber) || weekNumber < 1 || weekNumber > 14) {
+                addBotMessage("Lütfen 1 ile 14 arasında geçerli bir hafta numarası girin.", false);
+                return;
+            }
+            
+            selectedWeek = weekNumber;
+            addBotMessage(`${selectedLesson.name} dersinin ${selectedWeek}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.`, false);
+            conversationState = 'description';
+        }
+        
+        function handleDescriptionProvided(message) {
+            noteDescription = message;
+            
+            addBotMessage(`${selectedLesson.name} dersinin ${selectedWeek}. haftası için "${noteDescription}" konusunda bir not oluşturmak üzereyim. Onaylıyor musunuz?`, true, 
+                [
+                    {
+                        text: "Evet, oluştur",
+                        onclick: () => createNote()
+                    },
+                    {
+                        text: "Hayır, iptal et",
+                        onclick: () => cancelNoteCreation()
+                    }
+                ]
+            );
+            
+            conversationState = 'confirm';
+        }
+        
+        function handleConfirmation(message) {
+            if (message.toLowerCase().includes('evet') || message.toLowerCase().includes('onay')) {
+                createNote();
+            } else {
+                cancelNoteCreation();
+            }
+        }
+        
+        function createNote() {
+            addBotMessage("Not oluşturuluyor, lütfen bekleyin...");
+            
+            // AJAX isteği ile not oluşturma
+            fetch('/ai-generate-note/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    lesson_id: selectedLesson.id,
+                    week_number: selectedWeek,
+                    description: noteDescription
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addBotMessage(`Not başarıyla oluşturuldu! "${data.title}" başlıklı notu görmek için notlar sayfanızı kontrol edebilirsiniz.`, false);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    addBotMessage(`Not oluşturulurken bir hata oluştu: ${data.error}`, false);
+                }
+            })
+            .catch(error => {
+                addBotMessage("Not oluşturulurken bir hata oluştu. Lütfen daha sonra tekrar deneyin.", false);
+                console.error('Error:', error);
+            });
+            
+            // Konuşma durumunu sıfırla
+            resetConversation();
+        }
+        
+        function cancelNoteCreation() {
+            addBotMessage("Not oluşturma işlemi iptal edildi. Başka bir ders için not oluşturmak ister misiniz?", true,
+                [
+                    {% for lesson in all_lessons %}
+                    {
+                        text: "{{ lesson.name }}",
+                        onclick: () => selectLesson("{{ lesson.id }}", "{{ lesson.name }}")
+                    },
+                    {% endfor %}
+                ]
+            );
+            
+            resetConversation();
+        }
+        
+        function resetConversation() {
+            selectedLesson = null;
+            selectedWeek = null;
+            noteDescription = null;
+            conversationState = 'start';
+        }
+        
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+        
         function goBack() {
             history.back();
         }

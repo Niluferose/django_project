@@ -38,6 +38,11 @@ urlpatterns = [
     path('calendar_view/', views.calendar_view, name='calendar_view'),
     path('calendar/add/', views.add_event, name='add_event'),
     path('calendar/get_events/', views.get_events, name='get_events'),
+    path('chatbot/', views.chatbot_view, name='chatbot'),
+    path('chatbot/delete/<int:message_id>/', views.delete_chat_message, name='delete_chat_message'),
+    path('chatbot/clear/', views.clear_chat, name='clear_chat'),
+    path('chatbot/new/', views.new_chat, name='new_chat'),
+    path('ai-generate-note/', views.ai_generate_note, name='ai_generate_note'),
 ]
 
 if settings.DEBUG:

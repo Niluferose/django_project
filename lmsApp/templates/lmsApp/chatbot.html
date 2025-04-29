@@ -1,0 +1,198 @@
+{% extends 'main.html' %}
+
+{% block additional_styles %}
+<style>
+    /* Arka plan resmini değiştiriyoruz */
+    body {
+        background-image: none !important;
+        background-color: #f8f9fa !important;
+    }
+    
+    /* Ana içerik kısmı için arka plan rengi */
+    .container-fluid {
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-12 d-flex justify-content-between align-items-center">
+            <h2>LMS Asistanı</h2>
+            <div>
+                <a href="{% url 'new_chat' %}" class="btn btn-success btn-sm">
+                    <i class="bx bx-plus"></i> Yeni Sohbet
+                </a>
+                <form method="POST" action="{% url 'clear_chat' %}" class="d-inline" onsubmit="return confirm('Tüm sohbet geçmişini silmek istediğinizden emin misiniz?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="bx bx-trash"></i> Tüm Sohbeti Temizle
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card my-3">
+                <div class="card-header bg-primary text-white">
+                    <h3>Sohbet</h3>
+                    <small id="status-message" class="text-light"></small>
+                </div>
+                <div class="card-body">
+                    <div class="chat-history mb-4">
+                        {% if messages %}
+                            {% for chat in messages %}
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light d-flex justify-content-between">
+                                        <strong>Soru:</strong>
+                                        <a href="{% url 'delete_chat_message' message_id=chat.id %}" class="text-danger">
+                                            <i class="bx bx-trash"></i> Sil
+                                        </a>
+                                    </div>
+                                    <div class="card-body">
+                                        {{ chat.message }}
+                                    </div>
+                                </div>
+                                <div class="card mb-4 ml-4 {% if 'İşleniyor' in chat.response %}processing-card{% endif %}">
+                                    <div class="card-header bg-primary text-white">
+                                        <strong>Yanıt:</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        {% if "İşleniyor... Lütfen bekleyin." in chat.response %}
+                                            <div class="processing-message">
+                                                <p>İşleniyor... Lütfen bekleyin.</p>
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="sr-only">Yükleniyor...</span>
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            {{ chat.response|linebreaks }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                <p>Henüz hiç mesaj yok. Aşağıdaki formu kullanarak asistana soru sorabilirsiniz.</p>
+                                <p><strong>Örnek sorular:</strong></p>
+                                <ul>
+                                    <li>Matematik dersindeki integral konusunu özetler misin?</li>
+                                    <li>Python programlama dilinde döngüler nasıl kullanılır?</li>
+                                    <li>Çalışma motivasyonumu artırmak için ne yapabilirim?</li>
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="chat-form">
+                        <form method="POST" action="{% url 'chatbot' %}" id="chatForm">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                {{ form.message.label_tag }}
+                                {{ form.message }}
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">Gönder</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sayfa yüklendiğinde en alta kaydır
+    window.onload = function() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+    
+    // Form gönderildiğinde butonun durumunu değiştir
+    document.getElementById('chatForm').addEventListener('submit', function() {
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('submitBtn').innerHTML = 'İşleniyor...';
+    });
+    
+    // İşleniyor durumunda otomatik yenileme
+    document.addEventListener('DOMContentLoaded', function() {
+        var processingMessages = document.querySelectorAll('.processing-message');
+        var statusElement = document.getElementById('status-message');
+        
+        if (processingMessages.length > 0) {
+            // 3 saniyede bir sayfa yenilemesi için sayaç başlat
+            var countdown = 3;
+            statusElement.textContent = `Yanıt bekleniyor... (${countdown}s)`;
+            
+            var timer = setInterval(function() {
+                countdown--;
+                statusElement.textContent = `Yanıt bekleniyor... (${countdown}s)`;
+                
+                if (countdown <= 0) {
+                    clearInterval(timer);
+                    window.location.reload();
+                }
+            }, 1000);
+        }
+    });
+</script>
+
+<style>
+    .processing-card {
+        border: 1px solid #17a2b8;
+        box-shadow: 0 0 10px rgba(23, 162, 184, 0.3);
+    }
+    
+    #status-message {
+        float: right;
+        margin-top: -25px;
+    }
+    
+    .chat-history {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    /* Metin daha okunaklı olsun */
+    .card-body {
+        font-size: 16px;
+        line-height: 1.6;
+        color: #212529;
+    }
+    
+    /* Soru-cevap kartları daha belirgin */
+    .card {
+        border: 1px solid #dee2e6;
+        background-color: white;
+    }
+    
+    /* Form alanı iyileştirme */
+    .form-group textarea {
+        background-color: white;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 10px;
+        font-size: 16px;
+    }
+    
+    /* Buton iyileştirme */
+    .btn-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+        font-weight: 500;
+        padding: 8px 20px;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0069d9;
+        border-color: #0062cc;
+    }
+</style>
+
+{% endblock content %} 

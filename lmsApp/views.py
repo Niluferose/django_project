@@ -1,19 +1,22 @@
 from django.db.models import Q
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import UserCreationForm
-from .models import Room, Topic, Message, Lesson, Note, Week, WeekPDF, Event
+from .models import Room, Topic, Message, Lesson, Note, Week, WeekPDF, Event, ChatMessage
 from .forms import RoomForm
 
-from lmsApp.forms import LessonForm, NotesForm, PDFUploadForm, EventForm, EditNoteForm
+from lmsApp.forms import LessonForm, NotesForm, PDFUploadForm, EventForm, EditNoteForm, ChatForm
 from django.urls import reverse
 from django.db import transaction
 from django.http import FileResponse
 from django.http import JsonResponse
+from .tasks import process_chat_message, generate_ai_note, send_message_to_chatbot
+from .llm_utils import generate_note_summary, generate_study_questions
+import json
 
 # Create your views here.
 
@@ -134,7 +137,23 @@ def week_detail(request, lesson_id, week_number):
     week = Week.objects.get(lesson=lesson, week_number=week_number, user=request.user)
     notes = week.note_set.filter(user=request.user)
     pdfs = WeekPDF.objects.filter(week=week, user=request.user)
-    return render(request, 'lmsApp/week_detail.html', {'lesson': lesson, 'week': week, 'notes': notes, 'pdfs': pdfs})
+    
+    # AI notu oluşturma isteği kontrol ediliyor
+    ai_note_generated = False
+    if request.method == 'POST' and 'generate_ai_note' in request.POST:
+        title = request.POST.get('note_title', f"{lesson.name} - Hafta {week.week_number} AI Notları")
+        # Celery görevi çağır
+        task = generate_ai_note.delay(lesson_id, week_number, request.user.id, title)
+        messages.success(request, 'AI tarafından not oluşturuluyor. Bu işlem biraz zaman alabilir.')
+        ai_note_generated = True
+    
+    return render(request, 'lmsApp/week_detail.html', {
+        'lesson': lesson, 
+        'week': week, 
+        'notes': notes, 
+        'pdfs': pdfs,
+        'ai_note_generated': ai_note_generated
+    })
 
 @login_required(login_url='login')
 def view_pdf(request, pdf_id):
@@ -152,13 +171,27 @@ def delete_pdf(request, pdf_id):
 @login_required(login_url='login')
 def note_detail_view(request, note_id):
     note = Note.objects.get(id=note_id, user=request.user)
+    
+    # Eğer oluşturma isteği gelirse
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'summary':
+            # Not özetini oluştur
+            generate_note_summary.delay(note.id)
+            messages.success(request, 'Not özeti oluşturuluyor. Lütfen biraz sonra tekrar kontrol edin.')
+        elif action == 'questions':
+            # Çalışma sorularını oluştur
+            generate_study_questions.delay(note.id)
+            messages.success(request, 'Çalışma soruları oluşturuluyor. Lütfen biraz sonra tekrar kontrol edin.')
+    
     return render(request, 'lmsApp/note_detail.html', {'note': note})
 
 
 @login_required(login_url='login')
 def notes_list_view(request):
     notes = Note.objects.filter(user=request.user)
-    return render(request, 'lmsApp/note_list.html', {'notes': notes})
+    all_lessons = Lesson.objects.filter(user=request.user)  # Kullanıcının derslerini all_lessons olarak ekle
+    return render(request, 'lmsApp/note_list.html', {'notes': notes, 'all_lessons': all_lessons})
 
 
 @login_required(login_url='login')
@@ -207,6 +240,62 @@ def add_event(request):
     else:
         form = EventForm()
     return render(request, 'lmsApp/add_event.html', {'form': form})
+
+@login_required(login_url='login')
+def chatbot_view(request):
+    user_messages = ChatMessage.objects.filter(user=request.user).order_by('-created')[:10]
+    
+    if request.method == 'POST':
+        form = ChatForm(request.POST)
+        if form.is_valid():
+            message = form.cleaned_data['message']
+            
+            # Yeni mesaj oluştur
+            chat = ChatMessage.objects.create(
+                user=request.user,
+                message=message,
+                response="İşleniyor... Lütfen bekleyin."
+            )
+            
+            # Arka planda işleme başlat
+            process_chat_message.delay(chat.id)
+            
+            return redirect('chatbot')
+    else:
+        form = ChatForm()
+    
+    return render(request, 'lmsApp/chatbot.html', {
+        'form': form,
+        'messages': user_messages
+    })
+
+@login_required(login_url='login')
+def delete_chat_message(request, message_id):
+    """Belirli bir sohbet mesajını siler"""
+    try:
+        message = ChatMessage.objects.get(id=message_id, user=request.user)
+        if request.method == 'POST':
+            message.delete()
+            messages.success(request, 'Mesaj başarıyla silindi.')
+            return redirect('chatbot')
+        return render(request, 'lmsApp/delete_chat_message.html', {'message': message})
+    except ChatMessage.DoesNotExist:
+        messages.error(request, 'Mesaj bulunamadı.')
+        return redirect('chatbot')
+
+@login_required(login_url='login')
+def clear_chat(request):
+    """Kullanıcının tüm sohbet mesajlarını siler"""
+    if request.method == 'POST':
+        ChatMessage.objects.filter(user=request.user).delete()
+        messages.success(request, 'Tüm sohbet mesajları silindi.')
+    return redirect('chatbot')
+
+@login_required(login_url='login')
+def new_chat(request):
+    """Yeni bir sohbet başlatır (eski mesajları silmeden)"""
+    return redirect('chatbot')
+
 # Sniffer
 
 
@@ -365,6 +454,79 @@ def deleteMessage(request, pk):
         return redirect('home')
 
     return render(request, 'lmsApp/delete.html', {'obj': message})
+
+@login_required
+def note_list(request):
+    current_user = request.user
+    notes = Note.objects.filter(user=current_user)
+    all_lessons = Lesson.objects.all()  # Burada tüm dersleri alıyoruz
+    return render(request, 'lmsApp/note_list.html', {
+        'notes': notes,
+        'all_lessons': all_lessons
+    })
+
+@login_required
+def ai_generate_note(request):
+    """
+    AI tarafından not oluşturmak için kullanılan API endpoint'i.
+    Bu endpoint, AJAX isteği ile çağrılır ve not oluşturma işlemi başlatılır.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            lesson_id = data.get('lesson_id')
+            week_number = data.get('week_number')
+            description = data.get('description')
+            
+            # Parametreleri kontrol et
+            if not all([lesson_id, week_number]):
+                return JsonResponse({'success': False, 'error': 'Gerekli tüm parametreler sağlanmadı.'})
+            
+            # Dersi ve haftayı kontrol et
+            lesson = get_object_or_404(Lesson, id=lesson_id)
+            if not 1 <= int(week_number) <= 14:
+                return JsonResponse({'success': False, 'error': 'Hafta sayısı 1-14 aralığında olmalıdır.'})
+            
+            # Not başlığını oluştur
+            title = f"{lesson.name} - Hafta {week_number}"
+            if description:
+                title += f" ({description[:30]}{'...' if len(description) > 30 else ''})"
+            
+            # Celery görevi ile not oluştur
+            generate_ai_note.delay(
+                lesson_id,
+                week_number,
+                request.user.id,
+                title
+            )
+            
+            return JsonResponse({'success': True, 'title': title})
+            
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Geçersiz JSON verisi.'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Sadece POST istekleri destekleniyor.'})
+
+# URL yönlendirme görünüm fonksiyonları
+def redirect_to_dashboard(request):
+    return redirect('dashboard')
+
+def redirect_to_notes(request):
+    return redirect('notes_list_view')
+
+def redirect_to_lessons(request):
+    return redirect('lessons_list')
+
+def redirect_to_calendar(request):
+    return redirect('calendar_view')
+
+def redirect_to_forum(request):
+    return redirect('home')
+
+def redirect_to_chatbot(request):
+    return redirect('chatbot')
 
 
 

@@ -38,6 +38,27 @@
     .back-link:hover {
         background-color: #45a049;
     }
+    
+    .ai-section {
+        background-color: #f9f9f9;
+        border-left: 4px solid #2196F3;
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 4px;
+    }
+    
+    .ai-section h3 {
+        color: #2196F3;
+        margin-top: 0;
+    }
+    
+    .ai-actions {
+        margin-top: 20px;
+    }
+    
+    .ai-actions .btn {
+        margin-right: 10px;
+    }
 </style>
 {% endblock %}
 
@@ -45,7 +66,30 @@
 <div class="note-detail-container">
     <div class="note-title">{{ note.title }}</div>
     <div class="note-content">{{ note.note }}</div>
-    <a href="{% url 'week_detail' lesson_id=note.lesson.id week_number=note.week.week_number %}" class="back-link">Back to Week</a>
-    <a href="{% url 'notes_list_view'  %}" class="back-link">Back to All Notes</a>
+    
+    {% if note.ai_summary %}
+    <div class="ai-section">
+        <h3>AI Özeti</h3>
+        <p>{{ note.ai_summary }}</p>
+    </div>
+    {% endif %}
+    
+    {% if note.ai_questions %}
+    <div class="ai-section">
+        <h3>Çalışma Soruları</h3>
+        <p>{{ note.ai_questions|linebreaks }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="ai-actions">
+        <form method="post" action="">
+            {% csrf_token %}
+            <button type="submit" name="action" value="summary" class="btn btn-primary">{% if note.ai_summary %}Özeti Yenile{% else %}Özet Oluştur{% endif %}</button>
+            <button type="submit" name="action" value="questions" class="btn btn-info">{% if note.ai_questions %}Soruları Yenile{% else %}Çalışma Soruları Oluştur{% endif %}</button>
+        </form>
+    </div>
+    
+    <a href="{% url 'week_detail' lesson_id=note.lesson.id week_number=note.week.week_number %}" class="back-link">Haftaya Geri Dön</a>
+    <a href="{% url 'notes_list_view' %}" class="back-link">Tüm Notlara Dön</a>
 </div>
 {% endblock %}
