@@ -142,8 +142,14 @@ def week_detail(request, lesson_id, week_number):
     ai_note_generated = False
     if request.method == 'POST' and 'generate_ai_note' in request.POST:
         title = request.POST.get('note_title', f"{lesson.name} - Hafta {week.week_number} AI Notları")
+        description = request.POST.get('description')
+        
+        if not description:
+            messages.error(request, 'Not oluşturmak için konu açıklaması gereklidir.')
+            return redirect('week_detail', lesson_id=lesson_id, week_number=week_number)
+        
         # Celery görevi çağır
-        task = generate_ai_note.delay(lesson_id, week_number, request.user.id, title)
+        task = generate_ai_note.delay(lesson_id, week_number, request.user.id, title, description)
         messages.success(request, 'AI tarafından not oluşturuluyor. Bu işlem biraz zaman alabilir.')
         ai_note_generated = True
     
@@ -479,7 +485,7 @@ def ai_generate_note(request):
             description = data.get('description')
             
             # Parametreleri kontrol et
-            if not all([lesson_id, week_number]):
+            if not all([lesson_id, week_number, description]):
                 return JsonResponse({'success': False, 'error': 'Gerekli tüm parametreler sağlanmadı.'})
             
             # Dersi ve haftayı kontrol et
@@ -497,7 +503,8 @@ def ai_generate_note(request):
                 lesson_id,
                 week_number,
                 request.user.id,
-                title
+                title,
+                description
             )
             
             return JsonResponse({'success': True, 'title': title})

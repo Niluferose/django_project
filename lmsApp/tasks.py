@@ -5,6 +5,10 @@ import time
 import requests
 import json
 from django.conf import settings
+from ollama import Client
+
+# Ollama istemcisini oluştur
+ollama_client = Client(host=settings.OLLAMA_BASE_URL)
 
 @shared_task
 def process_chat_message(chat_id):
@@ -14,80 +18,71 @@ def process_chat_message(chat_id):
     try:
         chat = ChatMessage.objects.get(id=chat_id)
         
-        # Daha kapsamlı ve sınırlayıcı sistem promptu
-        system_prompt = """Sen bir öğrenci asistanısın. Adın LMS Asistanı.
-        Görevin öğrencilere eğitim konularında yardımcı olmaktır.
+        # English system prompt
+        system_prompt = """You are a student assistant named LMS Assistant.
+        Your task is to help students with educational topics.
         
-        Yanıtların şu özelliklere sahip olmalıdır:
-        1. Kısa ve öz (3-4 cümle)
-        2. Doğru Türkçe ile yazılmış
-        3. Konuyla doğrudan ilgili
-        4. Tutarlı ve anlaşılır
+        Your responses should have these characteristics:
+        1. Concise (3-4 sentences)
+        2. Clear and understandable
+        3. Directly related to the topic
+        4. Consistent and logical
+        5. Include practical examples
+        6. Suitable for student level
         
-        Eğer sorulan konu hakkında bilgin yoksa veya soru anlaşılmazsa, kibarca açıklama iste.
-        Dini, siyasi veya tartışmalı konulara girmeden, sadece akademik ve eğitsel yanıtlar ver.
-        Gerçek hayattaki bir asistanı taklit et, felsefik veya derin cevaplar verme.
+        If you don't know about the topic or the question is unclear, politely ask for clarification.
+        Avoid religious, political, or controversial topics. Focus only on academic and educational responses.
+        Act like a real assistant, avoid philosophical or deep answers.
         """
         
-        # Daha basit bir prompt, maksimum 100 token alacak şekilde
-        prompt = chat.message.strip()
-        if len(prompt) > 500:
-            prompt = prompt[:500]  # Çok uzun girdileri sınırla
-        
-        # Doğrudan Ollama API'sine istek
-        url = f"{settings.OLLAMA_BASE_URL}/api/generate"
-        
-        payload = {
-            "model": settings.OLLAMA_MODEL,
-            "prompt": prompt,
-            "system": system_prompt,
-            "stream": False,
-            "max_tokens": 200  # Yanıt boyutunu sınırla
-        }
+        # Prepare and limit prompt length
+        prompt = chat.message.strip()[:500]
         
         try:
-            # Kısa bir bekleme süresi
+            # Short delay
             time.sleep(0.5)
             
-            # Timeout süresini uzatma
-            response = requests.post(url, json=payload, timeout=30)
-            response.raise_for_status()
+            # Request to Ollama API
+            response = ollama_client.generate(
+                model=settings.OLLAMA_MODEL,
+                prompt=prompt,
+                system=system_prompt,
+                stream=False,
+                max_tokens=200,
+                temperature=0.7
+            )
             
-            # Yanıtı kaydet
-            result = response.json()
-            response_text = result.get("response", "Yanıt alınamadı. Lütfen daha sonra tekrar deneyin.")
-            
-            # Gereksiz metinleri temizle
-            response_text = response_text.replace("LMS Asistanı:", "").strip()
-            
+            # Process and save response
+            response_text = response.response.replace("LMS Assistant:", "").strip()
             chat.response = response_text
             chat.save()
             
             return True
+            
         except Exception as e:
-            print(f"LLM API isteği sırasında hata: {e}")
-            chat.response = "Üzgünüm, şu anda yanıt veremiyorum. Lütfen daha sonra tekrar deneyin."
+            print(f"Error during LLM API request: {e}")
+            chat.response = "I'm sorry, I cannot respond right now. Please try again later."
             chat.save()
             return False
             
     except Exception as e:
-        print(f"Sohbet mesajı işlenirken hata oluştu: {e}")
+        print(f"Error processing chat message: {e}")
         return False
 
 @shared_task
 def generate_ai_note(lesson_id, week_number, user_id, title=None, description=None):
     """
-    Belirtilen ders ve hafta için AI tarafından bir not oluşturur
+    Creates an AI-generated note for the specified lesson and week
     """
     try:
         from django.contrib.auth.models import User
         
-        # Ders ve hafta bilgilerini al
+        # Get lesson and week information
         lesson = Lesson.objects.get(id=lesson_id)
         week = Week.objects.filter(lesson_id=lesson_id, week_number=week_number).first()
         user = User.objects.get(id=user_id)
         
-        # Eğer hafta bulunamazsa, otomatik olarak oluştur
+        # Create week if not exists
         if not week:
             week = Week.objects.create(
                 lesson_id=lesson_id,
@@ -95,74 +90,47 @@ def generate_ai_note(lesson_id, week_number, user_id, title=None, description=No
                 user_id=user_id
             )
         
-        # Eğer başlık verilmemişse otomatik bir başlık oluştur
+        # Create default title if not provided
         if not title:
-            title = f"{lesson.name} - Hafta {week.week_number} Notları"
+            title = f"{lesson.name} - Week {week.week_number} Notes"
         
-        # Geçici olarak Ollama API'sini atla ve doğrudan bir not içeriği oluştur
-        if description:
-            note_content = f"""# {title}
-
-## Giriş
-Bu not, {lesson.name} dersinin {week.week_number}. haftası için '{description}' konusunda oluşturulmuştur.
-
-## Ana Kavramlar
-- {description} konusunun temel kavramları
-- Öğrencilerin anlaması gereken önemli noktalar
-- Konunun teorik temelleri
-
-## Örnekler
-1. Örnek uygulama 1
-2. Örnek uygulama 2
-3. Gerçek hayattan örnekler
-
-## Özet
-{description} konusu, {lesson.name} dersinin önemli bir parçasıdır ve alan için kritik öneme sahiptir.
-
-## Önerilen Kaynaklar
-- Ders kitabı: '{lesson.name} Temel Kavramlar'
-- Online kaynaklar
-- Ek okuma materyalleri
-"""
-        else:
-            note_content = f"""# {title}
-
-## Giriş
-Bu not, {lesson.name} dersinin {week.week_number}. haftası için oluşturulmuştur.
-
-## Ana Kavramlar
-- Dersin temel kavramları
-- Öğrencilerin anlaması gereken önemli noktalar
-- Teorik temeller
-
-## Örnekler
-1. Örnek uygulama 1
-2. Örnek uygulama 2
-3. Gerçek hayattan örnekler
-
-## Özet
-{lesson.name} dersinin bu haftaki konuları, alanın temel prensiplerini içermektedir.
-
-## Önerilen Kaynaklar
-- Ders kitabı: '{lesson.name} Temel Kavramlar'
-- Online kaynaklar
-- Ek okuma materyalleri
-"""
-
-        # Yeni not oluştur
-        note = Note.objects.create(
-            lesson=lesson,
-            week=week,
-            title=title,
-            note=note_content,
-            user=user
-        )
+        # Prepare prompt for Ollama
+        if not description:
+            raise ValueError("Description is required to generate a note.")
+            
+        prompt = f"""Write a concise note about {description}. Focus on answering these three questions:
+        1. What is it? (Definition and basic explanation)
+        2. Where it is used? (Main applications and use cases)
+        3. References for more information (Key resources to learn more)
+        """
         
-        print(f"Not başarıyla oluşturuldu: ID={note.id}, Başlık={note.title}")
-        return note.id
+        try:
+            # Request to Ollama API
+            response = ollama_client.generate(
+                model=settings.OLLAMA_MODEL,
+                prompt=prompt,
+                system="You are an academic note-taking assistant. Your task is to create comprehensive, well-structured notes about educational topics. Focus on providing accurate, detailed information in a Wikipedia-style format.",
+                stream=False
+            )
+            
+            # Create new note with AI-generated content
+            note = Note.objects.create(
+                lesson=lesson,
+                week=week,
+                title=title,
+                note=response['response'],
+                user=user
+            )
+            
+            print(f"Note successfully created: ID={note.id}, Title={note.title}")
+            return note.id
+            
+        except Exception as e:
+            print(f"Error generating note content: {e}")
+            return None
         
     except Exception as e:
-        print(f"AI notu oluşturulurken hata oluştu: {e}")
+        print(f"Error creating AI note: {e}")
         return None
 
 @shared_task
@@ -197,12 +165,11 @@ def daily_summarize_notes():
 @shared_task
 def send_message_to_chatbot(message, user_id=None, chat_id=None):
     """
-    AI sohbet asistanına mesaj gönderen ve yanıt alıp döndüren Celery görevi
+    Celery task that sends a message to the AI chat assistant and returns the response
     """
     try:
-        # Sohbet mesajı yoksa yeni oluştur
+        # Create new chat message if not exists
         if not chat_id:
-            # Yeni bir ChatMessage objesi oluştur ve kaydet
             from django.contrib.auth.models import User
             user = User.objects.get(id=user_id) if user_id else None
             
@@ -214,63 +181,52 @@ def send_message_to_chatbot(message, user_id=None, chat_id=None):
         else:
             chat = ChatMessage.objects.get(id=chat_id)
         
-        # Daha kapsamlı ve sınırlayıcı sistem promptu
-        system_prompt = """Sen bir not asistanısın. Adın Not Asistanı.
-        Görevin öğrencilere not alma konusunda yardımcı olmaktır.
+        # System prompt
+        system_prompt = """You are a note-taking assistant named Note Assistant.
+        Your task is to help students with taking notes.
         
-        Yanıtların şu özelliklere sahip olmalıdır:
-        1. Kısa ve öz (3-4 cümle)
-        2. Doğru Türkçe ile yazılmış
-        3. Not alma konusuyla doğrudan ilgili
-        4. Tutarlı ve anlaşılır
+        Your responses should have these characteristics:
+        1. Concise (3-4 sentences)
+        2. Clear and understandable
+        3. Directly related to note-taking
+        4. Consistent and logical
+        5. Include practical examples
+        6. Suitable for student level
         
-        Kullanıcı ders notu oluşturma isterse, bu konuda yardımcı ol. 
-        Hangi ders ve hafta için not istediklerini sor.
-        Eğer sorulan konu hakkında bilgin yoksa veya soru anlaşılmazsa, kibarca açıklama iste.
+        If the user wants to create lecture notes, help them with that.
+        Ask which course and week they want notes for.
+        If you don't know about the topic or the question is unclear, politely ask for clarification.
         """
         
-        # Prompt hazırla
-        prompt = message.strip()
-        if len(prompt) > 500:
-            prompt = prompt[:500]  # Çok uzun girdileri sınırla
-        
-        # Doğrudan Ollama API'sine istek
-        url = f"{settings.OLLAMA_BASE_URL}/api/generate"
-        
-        payload = {
-            "model": settings.OLLAMA_MODEL,
-            "prompt": prompt,
-            "system": system_prompt,
-            "stream": False,
-            "max_tokens": 200  # Yanıt boyutunu sınırla
-        }
+        # Prepare and limit prompt length
+        prompt = message.strip()[:500]
         
         try:
-            # Kısa bir bekleme süresi
+            # Short delay
             time.sleep(0.5)
             
-            # Timeout süresini uzatma
-            response = requests.post(url, json=payload, timeout=30)
-            response.raise_for_status()
+            # Request to Ollama API
+            response = ollama_client.generate(
+                model=settings.OLLAMA_MODEL,
+                prompt=prompt,
+                system=system_prompt,
+                stream=False,
+                max_tokens=200,
+                temperature=0.7
+            )
             
-            # Yanıtı kaydet
-            result = response.json()
-            response_text = result.get("response", "Yanıt alınamadı. Lütfen daha sonra tekrar deneyin.")
-            
-            # Gereksiz metinleri temizle
-            response_text = response_text.replace("Not Asistanı:", "").strip()
-            
-            chat.response = response_text
+            # Process and save response
+            chat.response = response.response.strip()
             chat.save()
             
-            return response_text
+            return chat.response
+            
         except Exception as e:
-            print(f"LLM API isteği sırasında hata: {e}")
-            error_message = "Üzgünüm, şu anda yanıt veremiyorum. Lütfen daha sonra tekrar deneyin."
-            chat.response = error_message
+            error_msg = "I'm sorry, I cannot respond right now. Please try again later."
+            chat.response = error_msg
             chat.save()
-            return error_message
+            return error_msg
             
     except Exception as e:
-        print(f"Sohbet mesajı işlenirken hata oluştu: {e}")
-        return "Bir hata oluştu. Lütfen daha sonra tekrar deneyin." 
+        print(f"Error processing chatbot message: {e}")
+        return "An error occurred. Please try again later." 

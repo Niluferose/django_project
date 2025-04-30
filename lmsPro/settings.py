@@ -144,4 +144,4 @@ CELERY_TIMEZONE = TIME_ZONE
 
 # Ollama LLM Ayarları
 OLLAMA_BASE_URL = 'http://ollama:11434'
-OLLAMA_MODEL = 'mistral'
+OLLAMA_MODEL = 'gemma:2b'
