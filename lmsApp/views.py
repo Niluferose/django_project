@@ -519,9 +519,8 @@ def ai_generate_note(request):
                     })
 
             # Not oluşturma işlemi
-            title = f"{lesson.name} - Hafta {week_number}"
-            if description:
-                title += f" ({description[:30]}{'...' if len(description) > 30 else ''})"
+            # Başlık sadece konu başlığı olsun
+            title = description[:50]  # Açıklamayı başlık olarak kullan, maksimum 50 karakter
             
             week = Week.objects.filter(lesson_id=lesson_id, week_number=week_number).first()
             if not week:
@@ -563,10 +562,17 @@ def ai_generate_note(request):
                     user=request.user
                 )
                 
+                # Not ekledikten sonra öneri fonksiyonunu tekrar çağır
+                suggestions = get_top_notes(5, request.user.id, lesson_id)
+                
+                # Not ekledikten sonra PopularNoteTitle tablosunu güncelle
+                analyze_notes(lesson_id=lesson_id)
+                
                 return JsonResponse({
                     'success': True,
                     'title': title,
-                    'note_id': note.id
+                    'note_id': note.id,
+                    'suggestions': suggestions
                 })
                 
             except Exception as e:

@@ -31,6 +31,17 @@ def analyze_notes(lesson_id=None):
     Eğer lesson_id verilmişse, sadece o dersin notlarını analiz eder.
     Verilmemişse, tüm derslerin notlarını analiz eder.
     """
+    # Önce PopularNoteTitle tablosunu temizle
+    if lesson_id:
+        # Sadece belirli dersin verilerini temizle
+        lesson = Lesson.objects.get(id=lesson_id)
+        PopularNoteTitle.objects.filter(lesson_name=lesson.name).delete()
+        print(f"{lesson.name} için PopularNoteTitle tablosu temizlendi.")
+    else:
+        # Tüm verileri temizle
+        PopularNoteTitle.objects.all().delete()
+        print("PopularNoteTitle tablosu tamamen temizlendi.")
+
     if lesson_id:
         # Sadece belirli bir dersin notlarını analiz et
         lesson = Lesson.objects.get(id=lesson_id)
@@ -44,13 +55,23 @@ def analyze_notes(lesson_id=None):
         # O isme sahip tüm derslerin notlarını çek
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT l.name as lesson_name, n.title as note_title, COUNT(*) as note_count
-                FROM "lmsApp_note" n
-                JOIN "lmsApp_lesson" l ON n.lesson_id = l.id
-                JOIN "auth_user" u ON n.user_id = u.id
-                WHERE u.is_active = true
-                AND l.name = %s
-                GROUP BY l.name, n.title
+                WITH note_counts AS (
+                    SELECT 
+                        l.name as lesson_name,
+                        n.title as note_title,
+                        COUNT(DISTINCT n.id) as note_count
+                    FROM "lmsApp_note" n
+                    JOIN "lmsApp_lesson" l ON n.lesson_id = l.id
+                    JOIN "auth_user" u ON n.user_id = u.id
+                    WHERE u.is_active = true
+                    AND l.name = %s
+                    GROUP BY l.name, n.title
+                )
+                SELECT 
+                    lesson_name,
+                    note_title,
+                    note_count
+                FROM note_counts
                 ORDER BY note_count DESC
             """, [lesson_name])
             results = cursor.fetchall()
@@ -61,15 +82,17 @@ def analyze_notes(lesson_id=None):
 
         # Pandas DataFrame'e dönüştür
         df = pd.DataFrame(results, columns=['lesson_name', 'note_title', 'note_count'])
-        df_top = df.nlargest(10, 'note_count')
+        print(f"\n{lesson_name} için not sayıları:")
+        print(df[['note_title', 'note_count']].to_string(index=False))
 
         # PopularNoteTitle tablosuna kaydet
-        for _, row in df_top.iterrows():
-            PopularNoteTitle.objects.update_or_create(
+        for _, row in df.iterrows():
+            popular_title, created = PopularNoteTitle.objects.update_or_create(
                 lesson_name=lesson_name,
                 title=row['note_title'],
                 defaults={'count': row['note_count']}
             )
+            print(f"PopularNoteTitle güncellendi: {popular_title.title}, count: {popular_title.count}")
         print(f"{lesson_name} için popüler başlıklar kaydedildi.")
 
     # Spark oturumu oluştur
