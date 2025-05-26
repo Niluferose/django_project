@@ -20,16 +20,16 @@ from .analysis.note_analysis import get_top_notes, analyze_notes
 from django.conf import settings
 from ollama import Client
 
-# Ollama client'ı oluştur
+
 ollama_client = Client(host=settings.OLLAMA_BASE_URL)
 
-# Create your views here.
 
-# Sniffer
+
+
 @login_required(login_url='login')
 def dashboard(request):
     lessons = Lesson.objects.filter(user=request.user)
-    print(lessons)  # Debug statement
+    print(lessons)  
     return render(request, 'lmsApp/dashboard.html', {'lessons': lessons})
 
 @login_required(login_url='login')
@@ -56,7 +56,7 @@ def create_lesson(request):
 @login_required(login_url='login')
 def create_note(request):
     if not Lesson.objects.filter(user=request.user).exists():
-        return redirect('create_lesson')  # create_lesson url'ine yönlendirme
+        return redirect('create_lesson') 
 
     if request.method == 'POST':
         form = NotesForm(request.POST)
@@ -68,7 +68,7 @@ def create_note(request):
                 title = form.cleaned_data['title']
                 note_text = form.cleaned_data['note']
 
-                # İlgili haftayı belirleyin
+                
                 week = Week.objects.get(lesson=lesson, week_number=week_number, user=request.user)
                 Note.objects.create(lesson=lesson, week=week, title=title, note=note_text, user=request.user)
                 url = reverse('week_detail', kwargs={'lesson_id': lesson.id, 'week_number': week.week_number})
@@ -143,7 +143,7 @@ def week_detail(request, lesson_id, week_number):
     notes = week.note_set.filter(user=request.user)
     pdfs = WeekPDF.objects.filter(week=week, user=request.user)
     
-    # AI notu oluşturma isteği kontrol ediliyor
+    
     ai_note_generated = False
     if request.method == 'POST' and 'generate_ai_note' in request.POST:
         title = request.POST.get('note_title', f"{lesson.name} - Hafta {week.week_number} AI Notları")
@@ -183,7 +183,7 @@ def delete_pdf(request, pdf_id):
 def note_detail_view(request, note_id):
     note = Note.objects.get(id=note_id, user=request.user)
     
-    # Eğer oluşturma isteği gelirse
+    
     if request.method == 'POST':
         action = request.POST.get('action')
     
@@ -193,7 +193,7 @@ def note_detail_view(request, note_id):
 @login_required(login_url='login')
 def notes_list_view(request):
     notes = Note.objects.filter(user=request.user)
-    all_lessons = Lesson.objects.filter(user=request.user)  # Kullanıcının derslerini all_lessons olarak ekle
+    all_lessons = Lesson.objects.filter(user=request.user)  
     return render(request, 'lmsApp/note_list.html', {'notes': notes, 'all_lessons': all_lessons})
 
 
@@ -201,12 +201,12 @@ def notes_list_view(request):
 def edit_note(request, note_id):
     note = Note.objects.get(id=note_id, user=request.user)
     if request.method == 'POST':
-        form = EditNoteForm(request.POST, instance=note)  # instance kullanarak sadece title ve note alanlarını düzenliyoruz
+        form = EditNoteForm(request.POST, instance=note)  
         if form.is_valid():
             form.save()
-            return redirect('note_detail', note_id=note.id)  # Burada ilgili notun detay sayfasına yönlendiriyoruz
+            return redirect('note_detail', note_id=note.id)  
     else:
-        form = EditNoteForm(instance=note)  # instance kullanarak formu dolduruyoruz
+        form = EditNoteForm(instance=note)  
     return render(request, 'lmsApp/edit_note.html', {'form': form})
 
 
@@ -253,14 +253,14 @@ def chatbot_view(request):
         if form.is_valid():
             message = form.cleaned_data['message']
             
-            # Yeni mesaj oluştur
+            
             chat = ChatMessage.objects.create(
                 user=request.user,
                 message=message,
                 response="İşleniyor... Lütfen bekleyin."
             )
             
-            # Arka planda işleme başlat
+            
             process_chat_message.delay(chat.id)
             
             return redirect('chatbot')
@@ -299,7 +299,6 @@ def new_chat(request):
     """Yeni bir sohbet başlatır (eski mesajları silmeden)"""
     return redirect('chatbot')
 
-# Sniffer
 
 
 def loginPage(request):
@@ -462,7 +461,7 @@ def deleteMessage(request, pk):
 def note_list(request):
     current_user = request.user
     notes = Note.objects.filter(user=current_user)
-    all_lessons = Lesson.objects.all()  # Burada tüm dersleri alıyoruz
+    all_lessons = Lesson.objects.all()  
     return render(request, 'lmsApp/note_list.html', {
         'notes': notes,
         'all_lessons': all_lessons
@@ -489,15 +488,15 @@ def ai_generate_note(request):
             week_number = int(week_number)
             print(f"Ders bulundu: {lesson.name}, Hafta: {week_number}")
 
-            # Eğer açıklama yoksa, önce analiz yap ve önerileri getir
+            
             if not description:
                 try:
                     print(f"Not analizi başlıyor... Ders ID: {lesson_id}")
-                    # Önce notları analiz et
+                    
                     analyze_notes(lesson_id=lesson_id)
                     print("Not analizi tamamlandı, öneriler getiriliyor...")
                     
-                    # Sonra önerileri getir
+                    
                     suggestions = get_top_notes(5, request.user.id, lesson_id)
                     print(f"Öneriler: {suggestions}")
                     
@@ -518,9 +517,9 @@ def ai_generate_note(request):
                         'message': f'{lesson.name} dersinin {week_number}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.'
                     })
 
-            # Not oluşturma işlemi
-            # Başlık sadece konu başlığı olsun
-            title = description[:50]  # Açıklamayı başlık olarak kullan, maksimum 50 karakter
+            
+            
+            title = description[:50]  
             
             week = Week.objects.filter(lesson_id=lesson_id, week_number=week_number).first()
             if not week:
@@ -549,7 +548,7 @@ def ai_generate_note(request):
                     stream=False
                 )
                 
-                # API yanıtını güvenli bir şekilde işle
+                
                 note_content = response.get('response', '')
                 if not note_content:
                     note_content = str(response)
@@ -562,10 +561,10 @@ def ai_generate_note(request):
                     user=request.user
                 )
                 
-                # Not ekledikten sonra öneri fonksiyonunu tekrar çağır
+                
                 suggestions = get_top_notes(5, request.user.id, lesson_id)
                 
-                # Not ekledikten sonra PopularNoteTitle tablosunu güncelle
+                
                 analyze_notes(lesson_id=lesson_id)
                 
                 return JsonResponse({
@@ -587,7 +586,7 @@ def ai_generate_note(request):
     
     return JsonResponse({'success': False, 'error': 'Sadece POST istekleri destekleniyor.'})
 
-# URL yönlendirme görünüm fonksiyonları
+
 def redirect_to_dashboard(request):
     return redirect('dashboard')
 
