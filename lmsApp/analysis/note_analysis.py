@@ -85,47 +85,47 @@ def analyze_notes(lesson_id=None):
         print(f"\n{lesson_name} için not sayıları:")
         print(df[['note_title', 'note_count']].to_string(index=False))
 
-        # PopularNoteTitle tablosuna kaydet
-        for _, row in df.iterrows():
+        # --- SPARK ANALİZİ VE VERİTABANINA KAYIT ---
+        # Spark oturumu oluştur
+        spark = SparkSession.builder \
+            .appName("NoteAnalysis") \
+            .master("spark://spark:7077") \
+            .config("spark.driver.host", "web") \
+            .config("spark.driver.bindAddress", "0.0.0.0") \
+            .config("spark.executor.memory", "1g") \
+            .config("spark.driver.memory", "1g") \
+            .getOrCreate()
+
+        # Spark DataFrame'e dönüştür
+        spark_df = spark.createDataFrame(df)
+
+        # En çok not alınan konuları Spark ile sırala
+        top_topics = spark_df.orderBy(col("note_count").desc()).toPandas()
+
+        # PopularNoteTitle tablosuna Spark sonucunu kaydet
+        for _, row in top_topics.iterrows():
             popular_title, created = PopularNoteTitle.objects.update_or_create(
                 lesson_name=lesson_name,
                 title=row['note_title'],
-                defaults={'count': row['note_count']}
+                defaults={'count': int(row['note_count'])}
             )
-            print(f"PopularNoteTitle güncellendi: {popular_title.title}, count: {popular_title.count}")
-        print(f"{lesson_name} için popüler başlıklar kaydedildi.")
+            print(f"PopularNoteTitle (SPARK) güncellendi: {popular_title.title}, count: {popular_title.count}")
+        print(f"{lesson_name} için popüler başlıklar SPARK ile kaydedildi.")
 
-    # Spark oturumu oluştur
-    spark = SparkSession.builder \
-        .appName("NoteAnalysis") \
-        .master("spark://spark:7077") \
-        .config("spark.driver.host", "web") \
-        .config("spark.driver.bindAddress", "0.0.0.0") \
-        .config("spark.executor.memory", "1g") \
-        .config("spark.driver.memory", "1g") \
-        .getOrCreate()
+        # Görselleştirme
+        plt.figure(figsize=(12, 6))
+        df_top = top_topics.nlargest(10, 'note_count')
+        plt.bar(df_top['note_title'], df_top['note_count'])
+        plt.xticks(rotation=45, ha='right')
+        plt.title('En Çok Not Alınan 10 Konu')
+        plt.xlabel('Konu Başlığı')
+        plt.ylabel('Not Sayısı')
+        plt.tight_layout()
+        plt.savefig('/app/note_analysis.png')
+        print("Grafik kaydedildi: /app/note_analysis.png")
 
-    # Spark DataFrame'e dönüştür
-    spark_df = spark.createDataFrame(df)
-
-    # En çok not alınan konuları bul
-    print("\nEn çok not alınan konular (ilk 10):")
-    spark_df.orderBy(col("note_count").desc()).show(10, truncate=False)
-
-    # Görselleştirme
-    plt.figure(figsize=(12, 6))
-    df_top = df.nlargest(10, 'note_count')
-    plt.bar(df_top['note_title'], df_top['note_count'])
-    plt.xticks(rotation=45, ha='right')
-    plt.title('En Çok Not Alınan 10 Konu')
-    plt.xlabel('Konu Başlığı')
-    plt.ylabel('Not Sayısı')
-    plt.tight_layout()
-    plt.savefig('/app/note_analysis.png')
-    print("Grafik kaydedildi: /app/note_analysis.png")
-
-    # Spark oturumunu kapat
-    spark.stop()
+        # Spark oturumunu kapat
+        spark.stop()
 
 if __name__ == "__main__":
     analyze_notes()
