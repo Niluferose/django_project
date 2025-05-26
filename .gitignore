@@ -1,0 +1,5 @@
+# Veri dizinleri
+postgres_data/
+redis_data/
+spark_data/
+ollama_data/ 

@@ -130,11 +130,11 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Redis ve Celery Ayarları
+
 REDIS_HOST = 'redis'
 REDIS_PORT = 6379
 
-# Celery Ayarları
+
 CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_ACCEPT_CONTENT = ['json']
@@ -142,6 +142,13 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
-# Ollama LLM Ayarları
+
 OLLAMA_BASE_URL = 'http://ollama:11434'
 OLLAMA_MODEL = 'gemma:2b'
+
+# Spark Configuration
+SPARK_MASTER_URL = 'spark://spark:7077'
+SPARK_DRIVER_HOST = 'web'
+SPARK_DRIVER_PORT = 7077
+SPARK_EXECUTOR_MEMORY = '1g'
+SPARK_DRIVER_MEMORY = '1g'

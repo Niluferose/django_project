@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import UserCreationForm
-from .models import Room, Topic, Message, Lesson, Note, Week, WeekPDF, Event, ChatMessage
+from .models import Room, Topic, Message, Lesson, Note, Week, WeekPDF, Event, ChatMessage, PopularNoteTitle
 from .forms import RoomForm
 
 from lmsApp.forms import LessonForm, NotesForm, PDFUploadForm, EventForm, EditNoteForm, ChatForm
@@ -15,8 +15,13 @@ from django.db import transaction
 from django.http import FileResponse
 from django.http import JsonResponse
 from .tasks import process_chat_message, generate_ai_note, send_message_to_chatbot
-from .llm_utils import generate_note_summary, generate_study_questions
 import json
+from .analysis.note_analysis import get_top_notes, analyze_notes
+from django.conf import settings
+from ollama import Client
+
+# Ollama client'ı oluştur
+ollama_client = Client(host=settings.OLLAMA_BASE_URL)
 
 # Create your views here.
 
@@ -148,7 +153,7 @@ def week_detail(request, lesson_id, week_number):
             messages.error(request, 'Not oluşturmak için konu açıklaması gereklidir.')
             return redirect('week_detail', lesson_id=lesson_id, week_number=week_number)
         
-        # Celery görevi çağır
+        
         task = generate_ai_note.delay(lesson_id, week_number, request.user.id, title, description)
         messages.success(request, 'AI tarafından not oluşturuluyor. Bu işlem biraz zaman alabilir.')
         ai_note_generated = True
@@ -181,14 +186,6 @@ def note_detail_view(request, note_id):
     # Eğer oluşturma isteği gelirse
     if request.method == 'POST':
         action = request.POST.get('action')
-        if action == 'summary':
-            # Not özetini oluştur
-            generate_note_summary.delay(note.id)
-            messages.success(request, 'Not özeti oluşturuluyor. Lütfen biraz sonra tekrar kontrol edin.')
-        elif action == 'questions':
-            # Çalışma sorularını oluştur
-            generate_study_questions.delay(note.id)
-            messages.success(request, 'Çalışma soruları oluşturuluyor. Lütfen biraz sonra tekrar kontrol edin.')
     
     return render(request, 'lmsApp/note_detail.html', {'note': note})
 
@@ -473,45 +470,113 @@ def note_list(request):
 
 @login_required
 def ai_generate_note(request):
-    """
-    AI tarafından not oluşturmak için kullanılan API endpoint'i.
-    Bu endpoint, AJAX isteği ile çağrılır ve not oluşturma işlemi başlatılır.
-    """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             lesson_id = data.get('lesson_id')
-            week_number = data.get('week_number')
+            week_number = data.get('week')
             description = data.get('description')
-            
-            # Parametreleri kontrol et
-            if not all([lesson_id, week_number, description]):
-                return JsonResponse({'success': False, 'error': 'Gerekli tüm parametreler sağlanmadı.'})
-            
-            # Dersi ve haftayı kontrol et
+
+            print(f"Gelen veriler - lesson_id: {lesson_id}, week: {week_number}, description: {description}")
+
+            if not lesson_id or not week_number:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Ders ve hafta bilgisi gereklidir.'
+                })
+
             lesson = get_object_or_404(Lesson, id=lesson_id)
-            if not 1 <= int(week_number) <= 14:
-                return JsonResponse({'success': False, 'error': 'Hafta sayısı 1-14 aralığında olmalıdır.'})
-            
-            # Not başlığını oluştur
+            week_number = int(week_number)
+            print(f"Ders bulundu: {lesson.name}, Hafta: {week_number}")
+
+            # Eğer açıklama yoksa, önce analiz yap ve önerileri getir
+            if not description:
+                try:
+                    print(f"Not analizi başlıyor... Ders ID: {lesson_id}")
+                    # Önce notları analiz et
+                    analyze_notes(lesson_id=lesson_id)
+                    print("Not analizi tamamlandı, öneriler getiriliyor...")
+                    
+                    # Sonra önerileri getir
+                    suggestions = get_top_notes(5, request.user.id, lesson_id)
+                    print(f"Öneriler: {suggestions}")
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'needs_suggestion': True,
+                        'suggestions': suggestions if suggestions else [],
+                        'message': f'{lesson.name} dersinin {week_number}. haftası için not oluşturacağım. Aşağıdaki önerilerden birini seçebilir veya kendi konunuzu yazabilirsiniz:'
+                    })
+                except Exception as e:
+                    print(f"Analiz sırasında hata: {str(e)}")
+                    import traceback
+                    print(f"Hata detayı: {traceback.format_exc()}")
+                    return JsonResponse({
+                        'success': True,
+                        'needs_suggestion': True,
+                        'suggestions': [],
+                        'message': f'{lesson.name} dersinin {week_number}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.'
+                    })
+
+            # Not oluşturma işlemi
             title = f"{lesson.name} - Hafta {week_number}"
             if description:
                 title += f" ({description[:30]}{'...' if len(description) > 30 else ''})"
             
-            # Celery görevi ile not oluştur
-            generate_ai_note.delay(
-                lesson_id,
-                week_number,
-                request.user.id,
-                title,
-                description
-            )
+            week = Week.objects.filter(lesson_id=lesson_id, week_number=week_number).first()
+            if not week:
+                week = Week.objects.create(
+                    lesson_id=lesson_id,
+                    week_number=week_number,
+                    user_id=request.user.id
+                )
             
-            return JsonResponse({'success': True, 'title': title})
+            prompt = f"""Write a comprehensive academic note about {description} in the context of {lesson.name}. Focus on answering these questions:
+            1. What is {description} in {lesson.name}? (Definition and basic explanation)
+            2. How is {description} used in {lesson.name}? (Main applications and use cases)
+            3. What are the key concepts and principles related to {description} in {lesson.name}?
+            4. What are the practical examples and applications in {lesson.name}?
+            5. References and resources for further study in {lesson.name}
+            
+            Format the note in a clear, structured way with headings and bullet points where appropriate.
+            Make sure the content is specifically relevant to {lesson.name} and its field of study.
+            """
+            
+            try:
+                response = ollama_client.generate(
+                    model=settings.OLLAMA_MODEL,
+                    prompt=prompt,
+                    system="You are an academic note-taking assistant. Your task is to create comprehensive, well-structured notes about educational topics. Focus on providing accurate, detailed information in a Wikipedia-style format.",
+                    stream=False
+                )
+                
+                # API yanıtını güvenli bir şekilde işle
+                note_content = response.get('response', '')
+                if not note_content:
+                    note_content = str(response)
+                
+                note = Note.objects.create(
+                    lesson=lesson,
+                    week=week,
+                    title=title,
+                    note=note_content,
+                    user=request.user
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'title': title,
+                    'note_id': note.id
+                })
+                
+            except Exception as e:
+                print(f"Not oluşturma sırasında hata: {str(e)}")
+                return JsonResponse({'success': False, 'error': f'Not oluşturulurken hata: {str(e)}'})
             
         except json.JSONDecodeError:
             return JsonResponse({'success': False, 'error': 'Geçersiz JSON verisi.'})
         except Exception as e:
+            print(f"Genel hata: {str(e)}")
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Sadece POST istekleri destekleniyor.'})

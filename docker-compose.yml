@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
@@ -16,23 +16,42 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ./redis_data:/data
 
-  celery:
-    build: .
-    command: celery -A lmsPro worker -l info
+  spark:
+    image: bitnami/spark:3.5.0
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_IPS=spark
+      - SPARK_PUBLIC_DNS=localhost
+    ports:
+      - "8080:8080"
+      - "7077:7077"
     volumes:
-      - .:/app
+      - ./spark_data:/bitnami/spark
+
+  spark-worker:
+    image: bitnami/spark:3.5.0
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_IPS=spark-worker
+      - SPARK_PUBLIC_DNS=localhost
     depends_on:
-      - db
-      - redis
+      - spark
 
   ollama:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - ./ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
 
@@ -47,8 +66,11 @@ services:
       - db
       - redis
       - ollama
+      - spark
+      - spark-worker
 
 volumes:
   postgres_data:
   redis_data:
   ollama_data:
+  spark_data:

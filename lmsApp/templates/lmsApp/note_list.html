@@ -493,8 +493,62 @@
             }
             
             selectedWeek = weekNumber;
-            addBotMessage(`${selectedLesson.name} dersinin ${selectedWeek}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.`, false);
-            conversationState = 'description';
+            console.log('Hafta seçildi:', selectedWeek);
+            
+            // Önce önerileri getir
+            fetch('/ai-generate-note/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    lesson_id: selectedLesson.id,
+                    week: selectedWeek
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('API yanıtı:', data);
+                if (data.success && data.needs_suggestion) {
+                    let suggestionMessage = `${selectedLesson.name} dersinin ${selectedWeek}. haftası için önerilen konular:\n\n`;
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        data.suggestions.forEach((suggestion, index) => {
+                            suggestionMessage += `${index + 1}. ${suggestion.title}\n`;
+                        });
+                        suggestionMessage += "\nBu konulardan birini seçebilir veya kendi konunuzu yazabilirsiniz.";
+                        
+                        // Önerileri göster
+                        addBotMessage(suggestionMessage, true, [
+                            ...data.suggestions.map(suggestion => ({
+                                text: suggestion.title,
+                                onclick: () => {
+                                    noteDescription = suggestion.title;
+                                    handleDescriptionProvided(suggestion.title);
+                                }
+                            })),
+                            {
+                                text: "Kendi konumu yazacağım",
+                                onclick: () => {
+                                    addBotMessage("Lütfen not konusunu yazın:", false);
+                                    conversationState = 'description';
+                                }
+                            }
+                        ]);
+                    } else {
+                        addBotMessage(`${selectedLesson.name} dersinin ${selectedWeek}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.`, false);
+                        conversationState = 'description';
+                    }
+                } else {
+                    addBotMessage(`${selectedLesson.name} dersinin ${selectedWeek}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.`, false);
+                    conversationState = 'description';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addBotMessage(`${selectedLesson.name} dersinin ${selectedWeek}. haftası için not oluşturacağım. Lütfen bu haftanın konusunu veya oluşturmak istediğiniz notun içeriğini kısaca açıklayın.`, false);
+                conversationState = 'description';
+            });
         }
         
         function handleDescriptionProvided(message) {
@@ -536,17 +590,33 @@
                 },
                 body: JSON.stringify({
                     lesson_id: selectedLesson.id,
-                    week_number: selectedWeek,
+                    week: selectedWeek,
                     description: noteDescription
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    addBotMessage(`Not başarıyla oluşturuldu! "${data.title}" başlıklı notu görmek için notlar sayfanızı kontrol edebilirsiniz.`, false);
-                    setTimeout(() => {
+                    if (data.needs_suggestion) {
+                        // Önerileri göster
+                        let suggestionMessage = "Size en popüler not konularını öneriyorum:\n\n";
+                        data.suggestions.forEach((suggestion, index) => {
+                            suggestionMessage += `${index + 1}. ${suggestion.title}\n`;
+                        });
+                        suggestionMessage += "\nBu konulardan birini seçmek ister misiniz?";
+                        
+                        addBotMessage(suggestionMessage, true, data.suggestions.map(suggestion => ({
+                            text: suggestion.title,
+                            onclick: () => {
+                                noteDescription = suggestion.title;
+                                createNote();
+                            }
+                        })));
+                    } else {
+                        addBotMessage(`Not başarıyla oluşturuldu! "${data.title}" başlıklı notu görmek için notlar sayfanızı kontrol edebilirsiniz.`, false);
+                        // Sayfayı hemen yenile
                         window.location.reload();
-                    }, 3000);
+                    }
                 } else {
                     addBotMessage(`Not oluşturulurken bir hata oluştu: ${data.error}`, false);
                 }

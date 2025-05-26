@@ -102,4 +102,12 @@ class ChatMessage(models.Model):
     def __str__(self):
         return f"{self.user.username}: {self.message[:50]}"
 
+class PopularNoteTitle(models.Model):
+    lesson_name = models.CharField(max_length=200, default="Unknown")
+    title = models.CharField(max_length=200)
+    count = models.IntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.lesson_name} - {self.title} ({self.count})"
+
 

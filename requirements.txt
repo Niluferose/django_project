@@ -7,3 +7,6 @@ celery==5.3.4
 requests==2.31.0
 django-celery-results==2.5.1
 ollama==0.1.6
+pyspark==3.5.0
+pandas==2.2.0
+matplotlib==3.8.2
