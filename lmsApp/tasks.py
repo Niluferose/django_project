@@ -6,6 +6,8 @@ import json
 from django.conf import settings
 from ollama import Client
 
+# Bildirim sistemi import
+from .utils import NotificationService
 
 ollama_client = Client(host=settings.OLLAMA_BASE_URL)
 
@@ -16,7 +18,15 @@ def process_chat_message(chat_id):
     """
     try:
         chat = ChatMessage.objects.get(id=chat_id)
+        user_id = chat.user.id
         
+        # İşlem başladığında bildirim gönder
+        NotificationService.send_notification(
+            user_id,
+            'chatbot_started',
+            'AI asistanınız mesajınızı işlemeye başladı...',
+            {'chat_id': chat_id}
+        )
         
         system_prompt = """You are a student assistant named LMS Assistant.
         Your task is to help students with educational topics.
@@ -34,13 +44,10 @@ def process_chat_message(chat_id):
         Act like a real assistant, avoid philosophical or deep answers.
         """
         
-        
         prompt = chat.message.strip()[:500]
         
         try:
-            
             time.sleep(0.5)
-            
             
             response = ollama_client.generate(
                 model=settings.OLLAMA_MODEL,
@@ -51,17 +58,38 @@ def process_chat_message(chat_id):
                 temperature=0.7
             )
             
-            
             response_text = response.response.replace("LMS Assistant:", "").strip()
             chat.response = response_text
             chat.save()
+            
+            # Başarılı tamamlandığında bildirim gönder
+            NotificationService.send_notification(
+                user_id,
+                'chatbot_completed',
+                'AI asistanınızdan yanıt geldi! 🤖',
+                {'chat_id': chat_id, 'response_preview': response_text[:50] + '...'}
+            )
+            
+            # Cache'i temizle
+            from django.core.cache import cache
+            cache.delete(f"user_chat_messages_{user_id}")
             
             return True
             
         except Exception as e:
             print(f"Error during LLM API request: {e}")
-            chat.response = "I'm sorry, I cannot respond right now. Please try again later."
+            error_response = "I'm sorry, I cannot respond right now. Please try again later."
+            chat.response = error_response
             chat.save()
+            
+            # Hata durumunda bildirim gönder
+            NotificationService.send_notification(
+                user_id,
+                'chatbot_error',
+                'AI asistanınızda bir hata oluştu. Lütfen tekrar deneyin.',
+                {'chat_id': chat_id, 'error': str(e)}
+            )
+            
             return False
             
     except Exception as e:
@@ -70,14 +98,22 @@ def process_chat_message(chat_id):
 
 @shared_task
 def generate_ai_note(lesson_id, week_number, user_id, title=None, description=None):
+    start_time = time.time()  # Başlangıç zamanı
+    
     try:
         from django.contrib.auth.models import User
-        
         
         lesson = Lesson.objects.get(id=lesson_id)
         week = Week.objects.filter(lesson_id=lesson_id, week_number=week_number).first()
         user = User.objects.get(id=user_id)
         
+        # İşlem başladığında bildirim gönder
+        NotificationService.send_notification(
+            user_id,
+            'ai_note_started',
+            f'🤖 AI "{lesson.name}" dersi için not oluşturmaya başladı...',
+            {'lesson_name': lesson.name, 'week': week_number}
+        )
         
         if not week:
             week = Week.objects.create(
@@ -86,10 +122,8 @@ def generate_ai_note(lesson_id, week_number, user_id, title=None, description=No
                 user_id=user_id
             )
         
-        
         if not title:
             title = f"{lesson.name} - Week {week.week_number} Notes"
-        
         
         if not description:
             raise ValueError("Description is required to generate a note.")
@@ -101,6 +135,8 @@ def generate_ai_note(lesson_id, week_number, user_id, title=None, description=No
         """
         
         try:
+            ai_start_time = time.time()  # AI işlem başlangıcı
+            
             response = ollama_client.generate(
                 model=settings.OLLAMA_MODEL,
                 prompt=prompt,
@@ -108,6 +144,8 @@ def generate_ai_note(lesson_id, week_number, user_id, title=None, description=No
                 stream=False
             )
             
+            ai_end_time = time.time()  # AI işlem bitişi
+            ai_duration = round(ai_end_time - ai_start_time, 2)
             
             note = Note.objects.create(
                 lesson=lesson,
@@ -117,15 +155,46 @@ def generate_ai_note(lesson_id, week_number, user_id, title=None, description=No
                 user=user
             )
             
+            end_time = time.time()  # Toplam işlem bitişi
+            total_duration = round(end_time - start_time, 2)
+            
+            # AI not oluşturulduğunda bildirim gönder (süre bilgisi ile)
+            NotificationService.send_notification(
+                user_id,
+                'ai_note_completed',
+                f'🤖 AI tarafından "{title}" notu {total_duration}s\'de oluşturuldu! (AI: {ai_duration}s)',
+                {
+                    'note_id': note.id, 
+                    'lesson_name': lesson.name, 
+                    'week': week_number,
+                    'ai_duration': ai_duration,
+                    'total_duration': total_duration
+                }
+            )
+            
             print(f"Note successfully created: ID={note.id}, Title={note.title}")
+            print(f"⏱️ Timing - AI: {ai_duration}s, Total: {total_duration}s")
             return note.id
             
         except Exception as e:
+            error_time = time.time()
+            error_duration = round(error_time - start_time, 2)
+            
+            # Hata durumunda bildirim gönder
+            NotificationService.send_notification(
+                user_id,
+                'ai_note_error',
+                f'❌ AI not oluşturma {error_duration}s sonra başarısız oldu.',
+                {'error': str(e), 'duration': error_duration}
+            )
+            
             print(f"Error generating note content: {e}")
             return None
         
     except Exception as e:
-        print(f"Error creating AI note: {e}")
+        error_time = time.time()
+        error_duration = round(error_time - start_time, 2)
+        print(f"Error creating AI note: {e} (Duration: {error_duration}s)")
         return None
 
 @shared_task

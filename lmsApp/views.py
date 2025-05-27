@@ -20,17 +20,54 @@ from .analysis.note_analysis import get_top_notes, analyze_notes
 from django.conf import settings
 from ollama import Client
 
+# Redis Cache imports
+from django.core.cache import cache
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_cookie
+import hashlib
+
+# Utils imports
+from .utils import NotificationService, CacheService, RateLimitService, SessionService
 
 ollama_client = Client(host=settings.OLLAMA_BASE_URL)
 
 
-
-
 @login_required(login_url='login')
 def dashboard(request):
-    lessons = Lesson.objects.filter(user=request.user)
+    # Kullanıcıyı online olarak işaretle
+    SessionService.set_user_online(request.user.id)
+    
+    # Aktivite takibi
+    SessionService.track_user_activity(request.user.id, 'dashboard_visit')
+    
+    # Cache'den dersleri getirmeye çalış
+    cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
+    lessons = cache.get(cache_key)
+    
+    if lessons is None:
+        # Cache'de yoksa veritabanından getir
+        lessons = list(Lesson.objects.filter(user=request.user).values(
+            'id', 'name', 'field', 'teacher'
+        ))
+        # 5 dakika cache'le
+        cache.set(cache_key, lessons, 300)
+    
+    # Bildirimleri getir
+    notifications = NotificationService.get_user_notifications(request.user.id)
+    unread_count = len([n for n in notifications if not n.get('read', False)])
+    
+    # Online kullanıcı sayısı
+    online_users = SessionService.get_online_users()
+    
+    context = {
+        'lessons': lessons,
+        'notifications': notifications[:5],  # Son 5 bildirim
+        'unread_count': unread_count,
+        'online_users_count': len(online_users)
+    }
+    
     print(lessons)  
-    return render(request, 'lmsApp/dashboard.html', {'lessons': lessons})
+    return render(request, 'lmsApp/dashboard.html', context)
 
 @login_required(login_url='login')
 def create_lesson(request):
@@ -45,6 +82,22 @@ def create_lesson(request):
 
                 for week_number in range(1, 15):
                     Week.objects.create(lesson=lesson, week_number=week_number, user=request.user)
+
+                # İlgili cache'leri temizle
+                lessons_cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
+                cache.delete(lessons_cache_key)
+                
+                # Dashboard cache'ini de temizle
+                dashboard_cache_key = f"user_lessons_{request.user.id}"
+                cache.delete(dashboard_cache_key)
+
+                # Yeni ders oluşturulduğunda bildirim gönder
+                NotificationService.send_notification(
+                    request.user.id,
+                    'lesson_created',
+                    f'🎓 Yeni ders "{name}" başarıyla oluşturuldu! 14 haftalık plan hazır.',
+                    {'lesson_id': lesson.id, 'lesson_name': name}
+                )
 
                 url = reverse('lesson_detail', kwargs={'lesson_id': lesson.id})
                 return redirect(url)
@@ -70,7 +123,20 @@ def create_note(request):
 
                 
                 week = Week.objects.get(lesson=lesson, week_number=week_number, user=request.user)
-                Note.objects.create(lesson=lesson, week=week, title=title, note=note_text, user=request.user)
+                note = Note.objects.create(lesson=lesson, week=week, title=title, note=note_text, user=request.user)
+                
+                # Cache'leri temizle
+                lesson_cache_key = CacheService.get_lesson_notes_cache_key(lesson.id, request.user.id)
+                cache.delete(lesson_cache_key)
+                
+                # Yeni not oluşturulduğunda bildirim gönder
+                NotificationService.send_notification(
+                    request.user.id,
+                    'note_created',
+                    f'📝 "{title}" başlıklı notunuz {lesson.name} dersine eklendi!',
+                    {'note_id': note.id, 'lesson_name': lesson.name, 'week': week_number}
+                )
+                
                 url = reverse('week_detail', kwargs={'lesson_id': lesson.id, 'week_number': week.week_number})
                 return redirect(url)
     else:
@@ -82,7 +148,8 @@ def create_note(request):
 
 @login_required(login_url='login')
 def lessons_list(request):
-    lessons = Lesson.objects.filter(user=request.user)
+    # Cache kullanmadan direkt veritabanından getir (template uyumluluğu için)
+    lessons = Lesson.objects.filter(user=request.user).order_by('-created')
     return render(request, 'lmsApp/lesson.html', {'lessons': lessons})
 @login_required(login_url='login')
 def lesson_detail(request, lesson_id):
@@ -112,8 +179,33 @@ def edit_lesson(request, lesson_id):
 def delete_lesson(request, lesson_id):
     lesson = Lesson.objects.get(id=lesson_id, user=request.user)
     if request.method == 'POST':
+        lesson_name = lesson.name
+        
         with transaction.atomic():
+            # Dersi sil
             lesson.delete()
+            
+            # İlgili cache'leri temizle
+            lessons_cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
+            cache.delete(lessons_cache_key)
+            
+            # Dashboard cache'ini de temizle
+            dashboard_cache_key = f"user_lessons_{request.user.id}"
+            cache.delete(dashboard_cache_key)
+            
+            # Ders notları cache'lerini temizle
+            lesson_cache_key = CacheService.get_lesson_notes_cache_key(lesson_id, request.user.id)
+            cache.delete(lesson_cache_key)
+            
+            # Ders silme bildirimi gönder
+            NotificationService.send_notification(
+                request.user.id,
+                'lesson_deleted',
+                f'🗑️ "{lesson_name}" dersi ve tüm içeriği başarıyla silindi.',
+                {'lesson_name': lesson_name}
+            )
+            
+            messages.success(request, f'"{lesson_name}" dersi başarıyla silindi.')
             return redirect('lessons_list')
     return render(request, 'lmsApp/delete_lesson.html', {'lesson': lesson})
 
@@ -130,6 +222,15 @@ def upload_pdf_view(request, lesson_id, week_number):
             week_pdf.week = week
             week_pdf.user = request.user
             week_pdf.save()
+            
+            # PDF yüklendiğinde bildirim gönder
+            NotificationService.send_notification(
+                request.user.id,
+                'pdf_uploaded',
+                f'📄 {lesson.name} dersi {week_number}. haftaya PDF başarıyla yüklendi!',
+                {'pdf_id': week_pdf.id, 'lesson_name': lesson.name, 'week': week_number}
+            )
+            
             return redirect(reverse('week_detail', kwargs={'lesson_id': lesson.id, 'week_number': week.week_number}))
     else:
         form = PDFUploadForm()
@@ -192,8 +293,20 @@ def note_detail_view(request, note_id):
 
 @login_required(login_url='login')
 def notes_list_view(request):
-    notes = Note.objects.filter(user=request.user)
-    all_lessons = Lesson.objects.filter(user=request.user)  
+    # Cache kullanmadan direkt veritabanından getir (template uyumluluğu için)
+    notes = Note.objects.filter(user=request.user).select_related('lesson', 'week').order_by('-created')
+    
+    # Dersleri cache'den getir
+    lessons_cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
+    all_lessons = cache.get(lessons_cache_key)
+    
+    if all_lessons is None:
+        all_lessons = Lesson.objects.filter(user=request.user)
+        cache.set(lessons_cache_key, list(all_lessons.values('id', 'name', 'field', 'teacher')), 300)
+    else:
+        # Cache'den gelen dictionary'leri Lesson object'lerine dönüştür
+        all_lessons = Lesson.objects.filter(user=request.user)
+    
     return render(request, 'lmsApp/note_list.html', {'notes': notes, 'all_lessons': all_lessons})
 
 
@@ -214,7 +327,30 @@ def edit_note(request, note_id):
 def delete_note(request, note_id):
     note = Note.objects.get(id=note_id, user=request.user)
     if request.method == 'POST':
+        lesson_id = note.lesson.id
+        week_number = note.week.week_number
+        note_title = note.title
+        
+        # Notu sil
         note.delete()
+        
+        # İlgili cache'leri temizle
+        lesson_cache_key = CacheService.get_lesson_notes_cache_key(lesson_id, request.user.id)
+        cache.delete(lesson_cache_key)
+        
+        # Kullanıcı dersleri cache'ini temizle
+        lessons_cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
+        cache.delete(lessons_cache_key)
+        
+        # Not silme bildirimi gönder
+        NotificationService.send_notification(
+            request.user.id,
+            'note_deleted',
+            f'🗑️ "{note_title}" başlıklı not başarıyla silindi.',
+            {'lesson_id': lesson_id, 'week': week_number}
+        )
+        
+        messages.success(request, f'"{note_title}" başlıklı not başarıyla silindi.')
         return redirect('notes_list_view')
     return render(request, 'lmsApp/delete_note.html', {'note': note})
 
@@ -236,6 +372,15 @@ def add_event(request):
             event = form.save(commit=False)
             event.user = request.user
             event.save()
+            
+            # Yeni etkinlik eklendiğinde bildirim gönder
+            NotificationService.send_notification(
+                request.user.id,
+                'event_created',
+                f'📅 "{event.title}" etkinliği {event.date.strftime("%d.%m.%Y")} tarihine eklendi!',
+                {'event_id': event.id, 'event_title': event.title, 'date': str(event.date)}
+            )
+            
             messages.success(request, 'Event added successfully!')
             return redirect('calendar_view')
         else:
@@ -246,13 +391,36 @@ def add_event(request):
 
 @login_required(login_url='login')
 def chatbot_view(request):
-    user_messages = ChatMessage.objects.filter(user=request.user).order_by('-created')[:10]
+    # Rate limiting kontrolü
+    can_proceed, error_msg = RateLimitService.check_rate_limit(
+        request.user.id, 'chatbot', limit=20, window=3600  # Saatte 20 mesaj
+    )
+    
+    # Cache'den mesajları getir
+    cache_key = f"user_chat_messages_{request.user.id}"
+    user_messages = cache.get(cache_key)
+    
+    if user_messages is None:
+        user_messages = list(ChatMessage.objects.filter(user=request.user)
+                           .order_by('-created')[:10]
+                           .values('id', 'message', 'response', 'created'))
+        cache.set(cache_key, user_messages, 300)  # 5 dakika cache
     
     if request.method == 'POST':
+        if not can_proceed:
+            messages.error(request, error_msg)
+            return redirect('chatbot')
+            
         form = ChatForm(request.POST)
         if form.is_valid():
             message = form.cleaned_data['message']
             
+            # Aktivite takibi
+            SessionService.track_user_activity(
+                request.user.id, 
+                'chatbot_message', 
+                {'message_length': len(message)}
+            )
             
             chat = ChatMessage.objects.create(
                 user=request.user,
@@ -260,6 +428,16 @@ def chatbot_view(request):
                 response="İşleniyor... Lütfen bekleyin."
             )
             
+            # Cache'i temizle
+            cache.delete(cache_key)
+            
+            # Bildirim gönder
+            NotificationService.send_notification(
+                request.user.id,
+                'chatbot_processing',
+                'AI asistanınız mesajınızı işliyor...',
+                {'chat_id': chat.id}
+            )
             
             process_chat_message.delay(chat.id)
             
@@ -267,9 +445,15 @@ def chatbot_view(request):
     else:
         form = ChatForm()
     
+    # Kalan deneme hakkı
+    remaining_attempts = RateLimitService.get_remaining_attempts(
+        request.user.id, 'chatbot', limit=20
+    )
+    
     return render(request, 'lmsApp/chatbot.html', {
         'form': form,
-        'messages': user_messages
+        'messages': user_messages,
+        'remaining_attempts': remaining_attempts
     })
 
 @login_required(login_url='login')
@@ -604,6 +788,61 @@ def redirect_to_forum(request):
 
 def redirect_to_chatbot(request):
     return redirect('chatbot')
+
+# Bildirim API Endpoints
+@login_required(login_url='login')
+def get_notifications(request):
+    """Kullanıcının bildirimlerini JSON olarak döndür"""
+    notifications = NotificationService.get_user_notifications(request.user.id)
+    return JsonResponse({
+        'notifications': notifications,
+        'unread_count': len([n for n in notifications if not n.get('read', False)])
+    })
+
+@login_required(login_url='login')
+def mark_notification_read(request, notification_id):
+    """Bildirimi okundu olarak işaretle"""
+    if request.method == 'POST':
+        NotificationService.mark_as_read(request.user.id, notification_id)
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False})
+
+@login_required(login_url='login')
+def mark_all_notifications_read(request):
+    """Tüm bildirimleri okundu olarak işaretle"""
+    if request.method == 'POST':
+        NotificationService.mark_as_read(request.user.id)
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False})
+
+@login_required(login_url='login')
+def get_user_activity(request):
+    """Kullanıcı aktivitelerini getir"""
+    activities = SessionService.get_user_activity(request.user.id)
+    return JsonResponse({'activities': activities})
+
+@login_required(login_url='login')
+def get_system_stats(request):
+    """Sistem istatistiklerini getir"""
+    online_users = SessionService.get_online_users()
+    
+    # Cache istatistikleri
+    cache_stats = {
+        'online_users': len(online_users),
+        'total_notifications': len(NotificationService.get_user_notifications(request.user.id)),
+        'user_activities': len(SessionService.get_user_activity(request.user.id))
+    }
+    
+    return JsonResponse(cache_stats)
+
+@login_required(login_url='login')
+def clear_user_cache(request):
+    """Kullanıcı cache'ini temizle"""
+    if request.method == 'POST':
+        CacheService.invalidate_user_cache(request.user.id)
+        messages.success(request, 'Cache başarıyla temizlendi.')
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False})
 
 
 

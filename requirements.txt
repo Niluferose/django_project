@@ -10,3 +10,4 @@ ollama==0.1.6
 pyspark==3.5.0
 pandas==2.2.0
 matplotlib==3.8.2
+django-redis==5.4.0

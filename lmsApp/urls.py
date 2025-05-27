@@ -43,6 +43,14 @@ urlpatterns = [
     path('chatbot/clear/', views.clear_chat, name='clear_chat'),
     path('chatbot/new/', views.new_chat, name='new_chat'),
     path('ai-generate-note/', views.ai_generate_note, name='ai_generate_note'),
+    
+    # Bildirim API endpoints
+    path('api/notifications/', views.get_notifications, name='get_notifications'),
+    path('api/notifications/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
+    path('api/notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
+    path('api/user-activity/', views.get_user_activity, name='get_user_activity'),
+    path('api/system-stats/', views.get_system_stats, name='get_system_stats'),
+    path('api/clear-cache/', views.clear_user_cache, name='clear_user_cache'),
 ]
 
 if settings.DEBUG:

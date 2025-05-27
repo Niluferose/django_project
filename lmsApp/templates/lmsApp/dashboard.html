@@ -1,187 +1,722 @@
 {% extends 'main.html' %}
 
 {% block content %}
-<div class="dashboard">
-    <div class="header">
-        <h3>Welcome {{ request.user }}, Time to Study!</h3>
-    </div>
-    <div class="quick-actions">
-        <div class="action-card">
-            <a href="{% url 'create_lesson' %}">
-                <div class="action-content">
-                    <h2>Create Lesson</h2>
-                    <p>Start New</p>
-                </div>
-            </a>
-        </div>
-        <div class="action-card">
-            <a href="{% url 'create_note' %}">
-                <div class="action-content">
-                    <h2>Create Note</h2>
-                    <p>Add New</p>
-                </div>
-            </a>
-        </div>
-    </div>
-    <div class="lessons-section">
-        <h2>My Lessons</h2>
-        <div class="lessons-carousel">
-            {% if lessons %}
-                {% for lesson in lessons %}
-                <div class="lesson-card">
-                    <a href="{% url 'lesson_detail' lesson.id %}">
-                        <div class="lesson-content">
-                            <h3>{{ lesson.name }}</h3>
-                            <p>{{ lesson.description }}</p>
-                        </div>
-                    </a>
-                    <div class="lesson-buttons">
-                        <a href="{% url 'edit_lesson' lesson.id %}" class="btn btn-edit">Edit</a>
-                        <a href="{% url 'delete_lesson' lesson.id %}" class="btn btn-delete">Delete</a>
+<div class="container-fluid">
+    <!-- Modern Bildirim ve İstatistik Paneli -->
+    <div class="row mb-4">
+        <!-- Bildirim Paneli -->
+        <div class="col-md-8">
+            <div class="notification-panel">
+                <div class="notification-header">
+                    <h4><i class="fas fa-bell notification-icon"></i> Bildirimler 
+                        <span id="notification-badge" class="notification-badge {% if unread_count > 0 %}active{% endif %}">
+                            {{ unread_count|default:0 }}
+                        </span>
+                    </h4>
+                    <div class="notification-actions">
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshNotifications()">
+                            <i class="fas fa-sync-alt"></i> Yenile
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="markAllAsRead()">
+                            <i class="fas fa-check-double"></i> Tümünü Okundu İşaretle
+                        </button>
                     </div>
                 </div>
-                {% endfor %}
-            {% else %}
-                <p>Are you ready to create your own ALMS? So, start by creating a lesson :)</p>
-            {% endif %}
+                
+                <div id="notifications-container" class="notifications-list">
+                    {% for notification in notifications %}
+                        <div class="notification-item {% if not notification.read %}unread{% endif %}" data-index="{{ forloop.counter0 }}">
+                            <div class="notification-content">
+                                <div class="notification-type-icon">
+                                    {% if notification.type == 'chatbot_completed' %}
+                                        <i class="fas fa-robot text-success"></i>
+                                    {% elif notification.type == 'chatbot_error' %}
+                                        <i class="fas fa-exclamation-triangle text-danger"></i>
+                                    {% elif notification.type == 'chatbot_started' %}
+                                        <i class="fas fa-cog fa-spin text-info"></i>
+                                    {% elif notification.type == 'lesson_created' %}
+                                        <i class="fas fa-graduation-cap text-primary"></i>
+                                    {% elif notification.type == 'note_created' %}
+                                        <i class="fas fa-sticky-note text-warning"></i>
+                                    {% elif notification.type == 'pdf_uploaded' %}
+                                        <i class="fas fa-file-pdf text-danger"></i>
+                                    {% elif notification.type == 'event_created' %}
+                                        <i class="fas fa-calendar-plus text-info"></i>
+                                    {% elif notification.type == 'ai_note_completed' %}
+                                        <i class="fas fa-brain text-purple"></i>
+                                    {% elif notification.type == 'note_deleted' %}
+                                        <i class="fas fa-trash text-danger"></i>
+                                    {% else %}
+                                        <i class="fas fa-info-circle text-primary"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="notification-text">
+                                    <p class="notification-message">{{ notification.message }}</p>
+                                    <small class="notification-time">
+                                        <i class="fas fa-clock"></i> {{ notification.timestamp }}
+                                    </small>
+                                </div>
+                                <div class="notification-actions-mini">
+                                    {% if not notification.read %}
+                                        <button class="btn btn-xs btn-outline-success" onclick="markAsRead({{ forloop.counter0 }})">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="no-notifications">
+                            <i class="fas fa-bell-slash"></i>
+                            <p>Henüz bildiriminiz yok.</p>
+                            <small>Sistem aktiviteleriniz burada görünecek.</small>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                {% if notifications|length > 5 %}
+                    <div class="notification-footer">
+                        <a href="#" class="btn btn-sm btn-link" onclick="loadMoreNotifications()">
+                            <i class="fas fa-chevron-down"></i> Daha fazla göster
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- İstatistik Paneli -->
+        <div class="col-md-4">
+            <div class="stats-panel">
+                <div class="stats-header">
+                    <h5><i class="fas fa-chart-bar"></i> Sistem İstatistikleri</h5>
+                </div>
+                <div class="stats-content">
+                    <div class="stat-item">
+                        <div class="stat-icon online">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="online-count">{{ online_users_count }}</span>
+                            <span class="stat-label">Online Kullanıcılar</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <div class="stat-icon lessons">
+                            <i class="fas fa-book"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value">{{ lessons|length }}</span>
+                            <span class="stat-label">Toplam Dersleriniz</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <div class="stat-icon cache">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="cache-status">Aktif</span>
+                            <span class="stat-label">Cache Durumu</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stats-actions">
+                    <button class="btn btn-sm btn-warning" onclick="clearCache()">
+                        <i class="fas fa-trash-alt"></i> Cache Temizle
+                    </button>
+                    <button class="btn btn-sm btn-info" onclick="refreshStats()">
+                        <i class="fas fa-sync-alt"></i> Yenile
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Mevcut Dashboard İçeriği -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="welcome-section">
+                <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+                <p class="welcome-text">Hoş geldiniz! Aşağıda derslerinizi görebilirsiniz.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for lesson in lessons %}
+        <div class="col-md-4 mb-3">
+            <div class="lesson-card">
+                <div class="lesson-header">
+                    <h5><i class="fas fa-graduation-cap"></i> {{ lesson.name }}</h5>
+                </div>
+                <div class="lesson-body">
+                    <p><strong><i class="fas fa-tag"></i> Alan:</strong> {{ lesson.field }}</p>
+                    <p><strong><i class="fas fa-user-tie"></i> Öğretmen:</strong> {{ lesson.teacher }}</p>
+                    <a href="{% url 'lesson_detail' lesson.id %}" class="btn btn-primary">
+                        <i class="fas fa-eye"></i> Detayları Gör
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-md-12">
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-book-open"></i>
+                </div>
+                <h4>Henüz ders eklememişsiniz!</h4>
+                <p>İlk dersinizi eklemek için aşağıdaki butona tıklayın.</p>
+                <a href="{% url 'create_lesson' %}" class="btn btn-success btn-lg">
+                    <i class="fas fa-plus"></i> İlk Dersi Ekle
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 </div>
-{% endblock %}
 
-{% block additional_styles %}
+<script>
+// Real-time bildirim sistemi
+function loadNotifications() {
+    fetch('/api/notifications/')
+        .then(response => response.json())
+        .then(data => {
+            updateNotificationBadge(data.unread_count);
+            updateNotificationsList(data.notifications);
+        })
+        .catch(error => console.error('Bildirim yüklenirken hata:', error));
+}
+
+function updateNotificationsList(notifications) {
+    const container = document.getElementById('notifications-container');
+    if (notifications.length === 0) {
+        container.innerHTML = `
+            <div class="no-notifications">
+                <i class="fas fa-bell-slash"></i>
+                <p>Henüz bildiriminiz yok.</p>
+                <small>Sistem aktiviteleriniz burada görünecek.</small>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = notifications.slice(0, 5).map((notification, index) => `
+        <div class="notification-item ${!notification.read ? 'unread' : ''}" data-index="${index}">
+            <div class="notification-content">
+                <div class="notification-type-icon">
+                    ${getNotificationIcon(notification.type)}
+                </div>
+                <div class="notification-text">
+                    <p class="notification-message">${notification.message}</p>
+                    <small class="notification-time">
+                        <i class="fas fa-clock"></i> ${notification.timestamp}
+                    </small>
+                </div>
+                <div class="notification-actions-mini">
+                    ${!notification.read ? `
+                        <button class="btn btn-xs btn-outline-success" onclick="markAsRead(${index})">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getNotificationIcon(type) {
+    switch(type) {
+        case 'chatbot_completed':
+            return '<i class="fas fa-robot text-success"></i>';
+        case 'chatbot_error':
+            return '<i class="fas fa-exclamation-triangle text-danger"></i>';
+        case 'chatbot_started':
+            return '<i class="fas fa-cog fa-spin text-info"></i>';
+        case 'lesson_created':
+            return '<i class="fas fa-graduation-cap text-primary"></i>';
+        case 'note_created':
+            return '<i class="fas fa-sticky-note text-warning"></i>';
+        case 'pdf_uploaded':
+            return '<i class="fas fa-file-pdf text-danger"></i>';
+        case 'event_created':
+            return '<i class="fas fa-calendar-plus text-info"></i>';
+        case 'ai_note_completed':
+            return '<i class="fas fa-brain text-purple"></i>';
+        case 'note_deleted':
+            return '<i class="fas fa-trash text-danger"></i>';
+        default:
+            return '<i class="fas fa-info-circle text-primary"></i>';
+    }
+}
+
+function markAsRead(index) {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                     document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                     getCookie('csrftoken');
+    
+    fetch(`/api/notifications/${index}/read/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadNotifications();
+        }
+    });
+}
+
+function markAllAsRead() {
+    const csrfToken = getCookie('csrftoken');
+    fetch('/api/notifications/read-all/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadNotifications();
+            showToast('Tüm bildirimler okundu olarak işaretlendi!', 'success');
+        }
+    });
+}
+
+function clearCache() {
+    if (confirm('Cache temizlensin mi?')) {
+        const csrfToken = getCookie('csrftoken');
+        fetch('/api/clear-cache/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Cache başarıyla temizlendi!', 'success');
+                refreshStats();
+            }
+        });
+    }
+}
+
+function refreshNotifications() {
+    const refreshBtn = document.querySelector('[onclick="refreshNotifications()"]');
+    refreshBtn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Yenileniyor...';
+    
+    loadNotifications();
+    
+    setTimeout(() => {
+        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Yenile';
+        showToast('Bildirimler yenilendi!', 'info');
+    }, 1000);
+}
+
+function refreshStats() {
+    updateSystemStats();
+    showToast('İstatistikler yenilendi!', 'info');
+}
+
+function updateNotificationBadge(count) {
+    const badge = document.getElementById('notification-badge');
+    if (badge) {
+        badge.textContent = count;
+        badge.className = `notification-badge ${count > 0 ? 'active' : ''}`;
+    }
+}
+
+// Sistem istatistiklerini güncelle
+function updateSystemStats() {
+    fetch('/api/system-stats/')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('online-count').textContent = data.online_users;
+            document.getElementById('cache-status').textContent = 'Aktif';
+        })
+        .catch(error => {
+            console.error('İstatistik yüklenirken hata:', error);
+            document.getElementById('cache-status').textContent = 'Hata';
+        });
+}
+
+// Toast bildirimi göster
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+
+// Cookie'den CSRF token al
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Sayfa yüklendiğinde ve her 30 saniyede bir güncelle
+document.addEventListener('DOMContentLoaded', function() {
+    loadNotifications();
+    updateSystemStats();
+    
+    // 30 saniyede bir güncelle
+    setInterval(() => {
+        loadNotifications();
+        updateSystemStats();
+    }, 30000);
+});
+</script>
+
 <style>
-body {
-    background-color: #f0f0f0;
-    font-family: 'Poppins', sans-serif;
+/* Modern Bildirim Paneli */
+.notification-panel {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    overflow: hidden;
 }
 
-.dashboard {
+.notification-header {
+    background: rgba(255,255,255,0.1);
     padding: 20px;
-}
-
-.header h1 {
-    font-size: 24px;
-    color: #333;
-}
-
-.quick-actions {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 20px;
-    gap: 20px;
+    align-items: center;
+    backdrop-filter: blur(10px);
 }
 
-.action-card {
-    background-color: #f2fed1;
-    border-radius: 10px;
-    width: 48%;
-    padding: 20px;
+.notification-header h4 {
+    color: white;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.notification-icon {
+    font-size: 1.5em;
+    animation: pulse 2s infinite;
+}
+
+.notification-badge {
+    background: #ff4757;
+    color: white;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.3s ease;
+}
+
+.notification-badge.active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.notification-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.notifications-list {
+    background: white;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    border-bottom: 1px solid #eee;
+    transition: all 0.3s ease;
+}
+
+.notification-item:hover {
+    background: #f8f9fa;
+}
+
+.notification-item.unread {
+    background: linear-gradient(90deg, #e3f2fd 0%, #f3e5f5 100%);
+    border-left: 4px solid #2196f3;
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    gap: 15px;
+}
+
+.notification-type-icon {
+    font-size: 1.5em;
+    width: 40px;
     text-align: center;
-    transition: background-color 0.3s ease;
 }
 
-.action-card a {
-    text-decoration: none;
+.notification-text {
+    flex: 1;
+}
+
+.notification-message {
+    margin: 0;
+    font-weight: 500;
     color: #333;
 }
 
-.action-card:hover {
-    background-color: #ABF600;
+.notification-time {
+    color: #666;
+    font-size: 0.85em;
 }
 
-.action-content h2 {
-    font-size: 18px;
-    margin-bottom: 10px;
-}
-
-.action-content p {
-    font-size: 14px;
-}
-
-.lessons-section {
-    background-color: #f2fed1;
-    border-radius: 10px;
-    padding: 20px;
-    margin-top: 20px;
-}
-
-.lessons-section h2 {
-    font-size: 20px;
-    margin-bottom: 20px;
-}
-
-.lessons-carousel {
+.notification-actions-mini {
     display: flex;
-    overflow-x: auto;
-    gap: 20px;
+    gap: 5px;
 }
 
-.lesson-card {
-    background-color: #404040;
-    border-radius: 10px;
-    padding: 15px;
-    width: 200px;
-    flex: 0 0 auto;
-    transition: box-shadow 0.3s ease;
-}
-
-.lesson-card a {
-    text-decoration: none;
-    color: white;
-}
-
-.lesson-card:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    background-color: #ABF600;
-}
-
-.lesson-content h3 {
-    font-size: 16px;
-    margin-bottom: 10px;
-}
-
-.lesson-content p {
-    font-size: 14px;
+.no-notifications {
+    text-align: center;
+    padding: 40px 20px;
     color: #666;
 }
 
-.lesson-buttons {
+.no-notifications i {
+    font-size: 3em;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* İstatistik Paneli */
+.stats-panel {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    border-radius: 15px;
+    padding: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.stats-header {
+    background: rgba(255,255,255,0.1);
+    padding: 20px;
+    backdrop-filter: blur(10px);
+}
+
+.stats-header h5 {
+    color: white;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stats-content {
+    background: white;
+    padding: 20px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    color: white;
+}
+
+.stat-icon.online {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.stat-icon.lessons {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.stat-icon.cache {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #333;
+}
+
+.stat-label {
+    font-size: 0.9em;
+    color: #666;
+}
+
+.stats-actions {
+    padding: 20px;
+    background: rgba(255,255,255,0.1);
     display: flex;
     gap: 10px;
-    margin-top: 10px;
+    justify-content: center;
 }
 
-/* Genel düğme stili */
-.btn {
-    display: inline-block;
-    padding: 10px 15px;
-    margin: 5px;
-    border-radius: 5px;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: bold;
-    color: #fff;
+/* Ders Kartları */
+.lesson-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    overflow: hidden;
+}
+
+.lesson-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+}
+
+.lesson-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+}
+
+.lesson-body {
+    padding: 20px;
+}
+
+/* Boş durum */
+.empty-state {
     text-align: center;
-    transition: background-color 0.3s ease;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
 }
 
-/* Edit düğmesi stili */
-.btn-edit {
-    background-color: #404040;
+.empty-icon {
+    font-size: 4em;
+    color: #ddd;
+    margin-bottom: 20px;
 }
 
-.btn-edit:hover {
-    background-color: black;
+/* Hoş geldin bölümü */
+.welcome-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    text-align: center;
 }
 
-/* Delete düğmesi stili */
-.btn-delete {
-    background-color: #404040;
+.welcome-text {
+    margin: 0;
+    opacity: 0.9;
 }
 
-.btn-delete:hover {
-    background-color: black;
+/* Toast bildirimleri */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+}
+
+.toast-notification.show {
+    transform: translateX(0);
+}
+
+.toast-success {
+    border-left: 4px solid #4caf50;
+    color: #4caf50;
+}
+
+.toast-info {
+    border-left: 4px solid #2196f3;
+    color: #2196f3;
+}
+
+.toast-error {
+    border-left: 4px solid #f44336;
+    color: #f44336;
+}
+
+/* Animasyonlar */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .notification-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .notification-actions {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .stats-actions {
+        flex-direction: column;
+    }
 }
 </style>
 {% endblock %}

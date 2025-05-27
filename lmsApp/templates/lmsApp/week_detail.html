@@ -228,14 +228,19 @@
     <div id="ai-note-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
-            <h3>AI Not Oluştur</h3>
-            <p>LLM modelimiz ders hakkında notlar oluşturacak. Lütfen not için bir başlık girin veya otomatik oluşturulması için boş bırakın.</p>
+            <h3>🤖 AI Not Oluştur</h3>
+            <p>AI asistanımız {{ lesson.name }} dersi için kapsamlı notlar oluşturacak. Hangi konu hakkında not istediğinizi belirtin.</p>
             
             <form method="POST" action="">
                 {% csrf_token %}
                 <div class="form-group mb-3">
                     <label for="note_title">Not Başlığı (Opsiyonel):</label>
                     <input type="text" name="note_title" id="note_title" class="form-control" placeholder="Otomatik başlık için boş bırakın">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="description">Konu Açıklaması (Zorunlu):</label>
+                    <textarea name="description" id="description" class="form-control" rows="3" placeholder="Örn: Python variables, Machine Learning basics, Database normalization..." required></textarea>
+                    <small class="form-text text-muted">AI'ın hangi konu hakkında not oluşturacağını belirtin.</small>
                 </div>
                 <input type="hidden" name="generate_ai_note" value="1">
                 <button type="submit" class="btn btn-primary">Not Oluştur</button>

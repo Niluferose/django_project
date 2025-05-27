@@ -9,6 +9,11 @@ class Lesson(models.Model):
     field = models.CharField(max_length=200)  # çap öğrencileri için opsiyonel
     teacher = models.CharField(max_length=200)  # optional
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
+    created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created', '-updated']
 
     def __str__(self):
         return self.name
@@ -19,7 +24,7 @@ class Week(models.Model):
     week_number = models.IntegerField()
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
 
-    def _str_(self):
+    def __str__(self):
         return f"Week {self.week_number} of {self.lesson.name}"
 
 
@@ -31,8 +36,13 @@ class Note(models.Model):
     ai_summary = models.TextField(blank=True, null=True)
     ai_questions = models.TextField(blank=True, null=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
+    created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated = models.DateTimeField(auto_now=True, null=True, blank=True)
 
-    def _str_(self):
+    class Meta:
+        ordering = ['-created', '-updated']
+
+    def __str__(self):
         return f"{self.title} ({self.lesson.name} - Week {self.week.week_number})"
 
 
