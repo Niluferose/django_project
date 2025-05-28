@@ -40,17 +40,10 @@ def dashboard(request):
     # Aktivite takibi
     SessionService.track_user_activity(request.user.id, 'dashboard_visit')
     
-    # Cache'den dersleri getirmeye çalış
-    cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
-    lessons = cache.get(cache_key)
-    
-    if lessons is None:
-        # Cache'de yoksa veritabanından getir
-        lessons = list(Lesson.objects.filter(user=request.user).values(
-            'id', 'name', 'field', 'teacher'
-        ))
-        # 5 dakika cache'le
-        cache.set(cache_key, lessons, 300)
+    # Her zaman fresh data getir (cache sorununu çözmek için)
+    lessons = list(Lesson.objects.filter(user=request.user).order_by('-created').values(
+        'id', 'name', 'field', 'teacher', 'created'
+    ))
     
     # Bildirimleri getir
     notifications = NotificationService.get_user_notifications(request.user.id)
@@ -66,7 +59,7 @@ def dashboard(request):
         'online_users_count': len(online_users)
     }
     
-    print(lessons)  
+    print(f"Dashboard lessons: {lessons}")  
     return render(request, 'lmsApp/dashboard.html', context)
 
 @login_required(login_url='login')
@@ -79,6 +72,7 @@ def create_lesson(request):
                 field = form.cleaned_data['field']
                 teacher = form.cleaned_data['teacher']
                 lesson = Lesson.objects.create(name=name, field=field, teacher=teacher, user=request.user)
+                print(f"✅ Lesson created: {lesson.id} - {lesson.name}")
 
                 for week_number in range(1, 15):
                     Week.objects.create(lesson=lesson, week_number=week_number, user=request.user)
@@ -86,21 +80,27 @@ def create_lesson(request):
                 # İlgili cache'leri temizle
                 lessons_cache_key = CacheService.get_user_lessons_cache_key(request.user.id)
                 cache.delete(lessons_cache_key)
+                print(f"🗑️ Cache deleted: {lessons_cache_key}")
                 
                 # Dashboard cache'ini de temizle
                 dashboard_cache_key = f"user_lessons_{request.user.id}"
                 cache.delete(dashboard_cache_key)
+                print(f"🗑️ Dashboard cache deleted: {dashboard_cache_key}")
 
                 # Yeni ders oluşturulduğunda bildirim gönder
-                NotificationService.send_notification(
-                    request.user.id,
-                    'lesson_created',
-                    f'🎓 Yeni ders "{name}" başarıyla oluşturuldu! 14 haftalık plan hazır.',
-                    {'lesson_id': lesson.id, 'lesson_name': name}
-                )
+                try:
+                    NotificationService.send_notification(
+                        request.user.id,
+                        'lesson_created',
+                        f'🎓 Yeni ders "{name}" başarıyla oluşturuldu! 14 haftalık plan hazır.',
+                        {'lesson_id': lesson.id, 'lesson_name': name}
+                    )
+                    print(f"🔔 Notification sent for user {request.user.id}")
+                except Exception as e:
+                    print(f"❌ Notification error: {e}")
 
-                url = reverse('lesson_detail', kwargs={'lesson_id': lesson.id})
-                return redirect(url)
+                messages.success(request, f'🎓 "{name}" dersi başarıyla oluşturuldu!')
+                return redirect('dashboard')  # Dashboard'a redirect et
     else:
         form = LessonForm()
     return render(request, 'lmsApp/create_lesson.html', context={'form': form})
